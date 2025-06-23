@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fokus Modus</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            overflow: hidden;
+        }
+        
+        .focus-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: var(--spacing-lg);
+        }
+        
+        .focus-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-xl);
+            padding: var(--spacing-md) 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .focus-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-focus);
+        }
+        
+        .focus-controls {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .timer-container {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .timer-display {
+            font-size: 4rem;
+            font-weight: 300;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+            font-family: 'Segoe UI', monospace;
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+        }
+        
+        .timer-progress {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto var(--spacing-lg);
+            position: relative;
+        }
+        
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        
+        .progress-ring-circle {
+            fill: transparent;
+            stroke: var(--bg-tertiary);
+            stroke-width: 8;
+        }
+        
+        .progress-ring-fill {
+            fill: transparent;
+            stroke: var(--accent-focus);
+            stroke-width: 8;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.3s ease;
+            filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.5));
+        }
+        
+        .timer-controls {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .timer-btn {
+            background: var(--bg-secondary);
+            border: 2px solid var(--accent-focus);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            color: var(--accent-focus);
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .timer-btn:hover {
+            background: var(--accent-focus);
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .timer-btn.primary {
+            background: var(--accent-focus);
+            color: white;
+        }
+        
+        .timer-btn.primary:hover {
+            background: #e55a2e;
+            transform: scale(1.1);
+        }
+        
+        .task-panel {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            overflow: hidden;
+        }
+        
+        .task-info, .task-notes {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .task-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .task-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .task-description {
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .task-meta {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+        
+        .meta-item {
+            background: var(--bg-tertiary);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        
+        .subtasks-list {
+            margin-top: var(--spacing-md);
+        }
+        
+        .subtask-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .subtask-item:last-child {
+            border-bottom: none;
+        }
+        
+        .subtask-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-success);
+        }
+        
+        .subtask-text {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+        
+        .subtask-text.completed {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+        
+        .notes-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .notes-list {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: var(--spacing-md);
+            max-height: 300px;
+        }
+        
+        .note-item {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            position: relative;
+        }
+        
+        .note-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .note-text {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+        
+        .note-input-container {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .note-input {
+            flex: 1;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+        }
+        
+        .note-input:focus {
+            outline: none;
+            border-color: var(--accent-focus);
+            box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+        }
+        
+        .add-note-btn {
+            background: var(--accent-focus);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: white;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            min-width: 80px;
+        }
+        
+        .add-note-btn:hover {
+            background: #e55a2e;
+            transform: translateY(-1px);
+        }
+        
+        .add-note-btn:disabled {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .session-stats {
+            text-align: center;
+            margin-bottom: var(--spacing-md);
+            padding: var(--spacing-md);
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-around;
+            gap: var(--spacing-md);
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-focus);
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: var(--spacing-xs);
+        }
+        
+        @media (max-width: 768px) {
+            .task-panel {
+                grid-template-columns: 1fr;
+            }
+            
+            .timer-display {
+                font-size: 3rem;
+            }
+            
+            .timer-progress {
+                width: 150px;
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="focus-container">
+        <!-- Header -->
+        <div class="focus-header">
+            <h1 class="focus-title">🎯 Fokus Modus</h1>
+            <div class="focus-controls">
+                <button class="btn btn-secondary" onclick="minimizeFocus()" title="Minimieren">
+                    <span class="icon">−</span>
+                </button>
+                <button class="btn btn-danger" onclick="exitFocus()" title="Fokus beenden">
+                    <span class="icon">×</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Timer Section -->
+        <div class="timer-container">
+            <div class="timer-progress">
+                <svg class="progress-ring" width="200" height="200">
+                    <circle class="progress-ring-circle" cx="100" cy="100" r="90"></circle>
+                    <circle class="progress-ring-fill" cx="100" cy="100" r="90" 
+                            stroke-dasharray="565.48" stroke-dashoffset="0" id="progressCircle"></circle>
+                </svg>
+            </div>
+            
+            <div class="timer-display" id="timerDisplay">20:00</div>
+            
+            <div class="timer-controls">
+                <button class="timer-btn" id="pauseBtn" onclick="toggleTimer()" title="Pause/Fortsetzen">
+                    ⏸️
+                </button>
+                <button class="timer-btn primary" id="stopBtn" onclick="stopFocus()" title="Session beenden">
+                    ⏹️
+                </button>
+            </div>
+            
+            <div class="session-stats">
+                <div class="stat-row">
+                    <div class="stat">
+                        <div class="stat-value" id="sessionCount">1</div>
+                        <div class="stat-label">Session</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="todayFocus">0</div>
+                        <div class="stat-label">Min heute</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="taskProgress">0%</div>
+                        <div class="stat-label">Fortschritt</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Panel -->
+        <div class="task-panel">
+            <!-- Task Info -->
+            <div class="task-info">
+                <div class="panel-title">
+                    <span class="icon">📋</span> Aktuelle Aufgabe
+                </div>
+                <div class="task-content">
+                    <div class="task-title" id="taskTitle">Aufgabe laden...</div>
+                    <div class="task-description" id="taskDescription"></div>
+                    
+                    <div class="task-meta" id="taskMeta">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                    
+                    <div class="subtasks-list" id="subtasksList">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="task-notes">
+                <div class="panel-title">
+                    <span class="icon">📝</span> Session Notizen
+                </div>
+                <div class="notes-container">
+                    <div class="notes-list" id="notesList">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                    
+                    <div class="note-input-container">
+                        <textarea class="note-input" id="noteInput" 
+                                  placeholder="Notiz hinzufügen... (Enter zum Speichern)"
+                                  rows="2"></textarea>
+                        <button class="add-note-btn" id="addNoteBtn" onclick="addNote()">
+                            Hinzufügen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/groups.js"></script>
+    <script src="js/tasks.js"></script>
+    <script src="js/focus.js"></script>
+    
+    <script>
+        // Fokus-Fenster spezifische Funktionen
+        let currentTask = null;
+        let focusSession = null;
+        let updateInterval = null;
+
+        // Fenster initialisieren
+        window.addEventListener('DOMContentLoaded', () => {
+            initializeFocusWindow();
+            setupEventListeners();
+            startUpdateLoop();
+        });
+
+        function initializeFocusWindow() {
+            // Aktuelle Session vom Hauptfenster abrufen
+            if (window.opener && window.opener.FocusManager) {
+                focusSession = window.opener.FocusManager.getCurrentFocusSession();
+                if (focusSession && focusSession.taskId) {
+                    currentTask = window.opener.TaskManager.getTaskById(focusSession.taskId);
+                    updateTaskDisplay();
+                    updateFocusDisplay();
+                }
+            }
+        }
+
+        function setupEventListeners() {
+            // Enter-Key für Notiz hinzufügen
+            document.getElementById('noteInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    addNote();
+                }
+            });
+
+            // Auto-resize für Textarea
+            document.getElementById('noteInput').addEventListener('input', (e) => {
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            });
+
+            // Fenster schließen Handler
+            window.addEventListener('beforeunload', () => {
+                if (updateInterval) {
+                    clearInterval(updateInterval);
+                }
+            });
+        }
+
+        function startUpdateLoop() {
+            updateInterval = setInterval(() => {
+                if (window.opener && window.opener.FocusManager) {
+                    focusSession = window.opener.FocusManager.getCurrentFocusSession();
+                    updateFocusDisplay();
+                    updateStats();
+                }
+            }, 1000);
+        }
+
+        function updateTaskDisplay() {
+            if (!currentTask) return;
+
+            document.getElementById('taskTitle').textContent = currentTask.title;
+            document.getElementById('taskDescription').textContent = currentTask.description || 'Keine Beschreibung';
+
+            // Meta-Informationen
+            const metaContainer = document.getElementById('taskMeta');
+            const group = window.opener.GroupManager.getGroupById(currentTask.groupId);
+            
+            metaContainer.innerHTML = `
+                <div class="meta-item">👥 ${group ? group.name : 'Unbekannt'}</div>
+                <div class="meta-item">⚡ ${currentTask.priority === 'high' ? 'Hoch' : currentTask.priority === 'medium' ? 'Mittel' : 'Niedrig'}</div>
+                ${currentTask.estimatedTime ? `<div class="meta-item">⏱️ ${currentTask.estimatedTime} Min</div>` : ''}
+                ${currentTask.tags.length > 0 ? `<div class="meta-item">🏷️ ${currentTask.tags.join(', ')}</div>` : ''}
+            `;
+
+            // Subtasks
+            updateSubtasksList();
+        }
+
+        function updateSubtasksList() {
+            if (!currentTask || !currentTask.subtasks) return;
+
+            const container = document.getElementById('subtasksList');
+            
+            if (currentTask.subtasks.length === 0) {
+                container.innerHTML = '<p class="text-muted">Keine Subtasks vorhanden</p>';
+                return;
+            }
+
+            container.innerHTML = currentTask.subtasks.map(subtask => `
+                <div class="subtask-item">
+                    <input type="checkbox" class="subtask-checkbox" 
+                           ${subtask.completed ? 'checked' : ''} 
+                           onchange="toggleSubtask('${subtask.id}')">
+                    <span class="subtask-text ${subtask.completed ? 'completed' : ''}">${subtask.text}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateFocusDisplay() {
+            if (!focusSession) return;
+
+            const timerDisplay = document.getElementById('timerDisplay');
+            const progressCircle = document.getElementById('progressCircle');
+            const pauseBtn = document.getElementById('pauseBtn');
+
+            // Timer anzeigen
+            const timeString = window.opener.FocusManager.formatRemainingTime(focusSession.remainingTime);
+            timerDisplay.textContent = timeString;
+
+            // Fortschrittsring aktualisieren
+            const totalTime = focusSession.duration;
+            const remainingTime = focusSession.remainingTime;
+            const progress = ((totalTime - remainingTime) / totalTime) * 100;
+            const circumference = 2 * Math.PI * 90; // 90 ist der Radius
+            const strokeDashoffset = circumference - (progress / 100) * circumference;
+            
+            progressCircle.style.strokeDashoffset = strokeDashoffset;
+
+            // Pause-Button aktualisieren
+            if (focusSession.isPaused) {
+                pauseBtn.innerHTML = '▶️';
+                pauseBtn.title = 'Fortsetzen';
+            } else {
+                pauseBtn.innerHTML = '⏸️';
+                pauseBtn.title = 'Pausieren';
+            }
+
+            // Aufgaben-Fortschritt aktualisieren
+            if (currentTask) {
+                document.getElementById('taskProgress').textContent = `${currentTask.progress || 0}%`;
+            }
+        }
+
+        function updateStats() {
+            if (window.opener && window.opener.StorageManager) {
+                const todayStats = window.opener.StorageManager.getTodayStats();
+                document.getElementById('todayFocus').textContent = todayStats.focusTime;
+            }
+        }
+
+        function toggleTimer() {
+            if (window.opener && window.opener.FocusManager) {
+                window.opener.FocusManager.toggleFocusSession();
+            }
+        }
+
+        function stopFocus() {
+            if (confirm('Möchten Sie die Fokus-Session wirklich beenden?')) {
+                if (window.opener && window.opener.FocusManager) {
+                    window.opener.FocusManager.stopFocusSession();
+                }
+                window.close();
+            }
+        }
+
+        function exitFocus() {
+            stopFocus();
+        }
+
+        function minimizeFocus() {
+            window.minimize();
+        }
+
+        function toggleSubtask(subtaskId) {
+            if (window.opener && window.opener.TaskManager) {
+                window.opener.TaskManager.toggleSubtask(currentTask.id, subtaskId);
+                // Task-Daten aktualisieren
+                currentTask = window.opener.TaskManager.getTaskById(currentTask.id);
+                updateSubtasksList();
+                updateFocusDisplay();
+            }
+        }
+
+        function addNote() {
+            const noteInput = document.getElementById('noteInput');
+            const noteText = noteInput.value.trim();
+            
+            if (!noteText) return;
+
+            if (window.opener && window.opener.FocusManager) {
+                window.opener.FocusManager.addFocusNote(noteText);
+                noteInput.value = '';
+                noteInput.style.height = 'auto';
+                updateNotesList();
+            }
+        }
+
+        function updateNotesList() {
+            const container = document.getElementById('notesList');
+            
+            if (!focusSession || !focusSession.notes || focusSession.notes.length === 0) {
+                container.innerHTML = '<p class="text-muted">Keine Notizen in dieser Session</p>';
+                return;
+            }
+
+            container.innerHTML = focusSession.notes.map(note => `
+                <div class="note-item">
+                    <div class="note-time">${new Date(note.timestamp).toLocaleTimeString('de-DE')}</div>
+                    <div class="note-text">${note.text}</div>
+                </div>
+            `).join('');
+
+            // Scroll nach unten
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Globale Funktionen für Event-Handler
+        window.toggleSubtask = toggleSubtask;
+        window.addNote = addNote;
+        window.toggleTimer = toggleTimer;
+        window.stopFocus = stopFocus;
+        window.exitFocus = exitFocus;
+        window.minimizeFocus = minimizeFocus;
+    </script>
+</body>
+</html>
