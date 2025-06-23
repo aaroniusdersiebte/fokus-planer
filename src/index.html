@@ -47,9 +47,17 @@
                     <input type="text" id="searchInput" placeholder="Suchen..." class="search-input">
                     <span class="search-icon">🔍</span>
                 </div>
-                <button class="view-toggle" id="viewToggle" title="Ansicht wechseln">
-                    <span class="icon">⊞</span>
-                </button>
+                <div class="view-toggle-group">
+                    <button class="view-toggle active" data-view="kanban" title="Kanban-Ansicht">
+                        <span class="icon">📋</span>
+                    </button>
+                    <button class="view-toggle" data-view="list" title="Listen-Ansicht">
+                        <span class="icon">📄</span>
+                    </button>
+                    <button class="view-toggle" data-view="grid" title="Raster-Ansicht">
+                        <span class="icon">⊞</span>
+                    </button>
+                </div>
             </div>
         </nav>
 
@@ -141,7 +149,7 @@
 
     <!-- Popup Overlay -->
     <div class="popup-overlay" id="popupOverlay">
-        <div class="popup-container">
+        <div class="popup-container modern-task-dialog">
             <div class="popup-header">
                 <h3 id="popupTitle">Neue Aufgabe</h3>
                 <button class="popup-close" id="popupClose">&times;</button>
@@ -156,6 +164,7 @@
     <script src="js/debug.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/groups.js"></script>
+    <script src="js/task-editor.js"></script>
     <script src="js/tasks.js"></script>
     <script src="js/notes.js"></script>
     <script src="js/popup.js"></script>

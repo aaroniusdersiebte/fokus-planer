@@ -4,7 +4,7 @@ let appInitialized = false;
 let appData = {};
 
 // App initialisieren
-function initializeApp() {
+async function initializeApp() {
     if (appInitialized) return;
     
     console.log('🚀 Fokus Planer wird gestartet...');
@@ -17,7 +17,7 @@ function initializeApp() {
         loadAppData();
         
         // 3. Manager initialisieren (in der richtigen Reihenfolge)
-        initializeManagers();
+        await initializeManagers();
         
         // 4. UI initialisieren
         initializeUserInterface();
@@ -160,28 +160,64 @@ function initializeManagers() {
     
     // Reihenfolge ist wichtig: Storage -> Groups -> Tasks/Notes -> Focus -> UI
     
+    // Warte bis alle Scripts geladen sind
+    return new Promise((resolve) => {
+        const checkManagers = () => {
+            let allLoaded = true;
+            const requiredManagers = ['StorageManager', 'GroupManager', 'TaskManager', 'NoteManager', 'PopupManager'];
+            
+            for (const manager of requiredManagers) {
+                if (!window[manager]) {
+                    console.log(`⏳ Warte auf ${manager}...`);
+                    allLoaded = false;
+                    break;
+                }
+            }
+            
+            if (allLoaded) {
+                initializeManagersAfterLoad();
+                resolve();
+            } else {
+                setTimeout(checkManagers, 100);
+            }
+        };
+        
+        checkManagers();
+    });
+}
+
+// Manager initialisieren nach dem Laden
+function initializeManagersAfterLoad() {
     // 1. GroupManager
-    if (window.GroupManager) {
+    if (window.GroupManager && window.GroupManager.loadGroups) {
         window.GroupManager.loadGroups();
         console.log('✅ GroupManager initialisiert');
+    } else {
+        console.warn('⚠️ GroupManager nicht verfügbar');
     }
     
     // 2. TaskManager
-    if (window.TaskManager) {
+    if (window.TaskManager && window.TaskManager.loadTasks) {
         window.TaskManager.loadTasks();
         console.log('✅ TaskManager initialisiert');
+    } else {
+        console.warn('⚠️ TaskManager nicht verfügbar');
     }
     
     // 3. NoteManager
-    if (window.NoteManager) {
+    if (window.NoteManager && window.NoteManager.loadNotes) {
         window.NoteManager.loadNotes();
         console.log('✅ NoteManager initialisiert');
+    } else {
+        console.warn('⚠️ NoteManager nicht verfügbar');
     }
     
     // 4. FocusManager
-    if (window.FocusManager) {
+    if (window.FocusManager && window.FocusManager.loadFocusSettings) {
         window.FocusManager.loadFocusSettings();
         console.log('✅ FocusManager initialisiert');
+    } else {
+        console.warn('⚠️ FocusManager nicht verfügbar');
     }
     
     console.log('⚙️ Alle Manager erfolgreich initialisiert');

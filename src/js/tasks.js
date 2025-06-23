@@ -1,8 +1,16 @@
 // Tasks Management - Globale Funktionen für Aufgaben-Verwaltung
 
 let tasks = [];
-let currentViewMode = 'grid';
+let currentViewMode = 'kanban'; // Standard auf Kanban
 let currentFilter = '';
+
+// View-Modus aus UIManager synchronisieren
+function syncViewMode() {
+    if (window.UIManager && window.UIManager.currentViewMode) {
+        currentViewMode = window.UIManager.currentViewMode();
+    }
+    return currentViewMode;
+}
 
 // Aufgaben laden
 function loadTasks() {
@@ -17,7 +25,7 @@ function saveTasks() {
     return window.StorageManager.writeDataFile('tasks', tasks);
 }
 
-// Neue Aufgabe erstellen
+// Neue Aufgabe erstellen (ohne dueDate und estimatedTime)
 function createTask(taskData) {
     const newTask = {
         id: window.StorageManager.generateUUID(),
@@ -32,8 +40,6 @@ function createTask(taskData) {
         progress: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        dueDate: taskData.dueDate || null,
-        estimatedTime: taskData.estimatedTime || 0,
         actualTime: 0
     };
     
@@ -340,21 +346,24 @@ function deleteTaskNote(taskId, noteId) {
 
 // Aufgaben UI aktualisieren
 function updateTasksUI() {
-    const viewMode = window.UIManager ? window.UIManager.currentViewMode || 'grid' : 'grid';
+    // Synchronisiere View-Modus
+    currentViewMode = syncViewMode();
     
-    if (viewMode === 'kanban') {
+    console.log('🔄 TaskManager.updateTasksUI() mit Modus:', currentViewMode);
+    
+    if (currentViewMode === 'kanban') {
         updateKanbanView();
-    } else if (viewMode === 'list') {
+    } else if (currentViewMode === 'list') {
         updateListView();
     } else {
-        updateTasksContainer();
+        updateGridView(); // Raster-Ansicht nach Gruppen sortiert
     }
     
     updateRecentTasks();
     updateDashboardStats();
 }
 
-// Kanban-Ansicht aktualisieren
+// Kanban-Ansicht aktualisieren (Hauptansicht)
 function updateKanbanView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
@@ -367,11 +376,11 @@ function updateKanbanView() {
     
     let filteredTasks = filterTasks(searchTerm, groupId);
     
-    // Nach Priorität gruppieren
+    // Nach Priorität gruppieren für Kanban
     const priorities = {
-        high: { name: 'Hohe Priorität', icon: '🔴', tasks: [] },
-        medium: { name: 'Mittlere Priorität', icon: '🟡', tasks: [] },
-        low: { name: 'Niedrige Priorität', icon: '🟢', tasks: [] }
+        high: { name: 'Hohe Priorität', icon: '🔴', color: '#f44336', tasks: [] },
+        medium: { name: 'Mittlere Priorität', icon: '🟡', color: '#ff9800', tasks: [] },
+        low: { name: 'Niedrige Priorität', icon: '🟢', color: '#4caf50', tasks: [] }
     };
     
     filteredTasks.forEach(task => {
@@ -384,14 +393,19 @@ function updateKanbanView() {
                 <div class="kanban-column">
                     <div class="kanban-header">
                         <div class="kanban-title">
-                            <span>${data.icon}</span>
-                            <span>${data.name}</span>
+                            <span class="kanban-icon">${data.icon}</span>
+                            <span class="kanban-text">${data.name}</span>
                             <span class="kanban-count">${data.tasks.length}</span>
+                        </div>
+                        <div class="kanban-progress">
+                            <div class="progress-mini" style="background: ${data.color}20">
+                                <div class="progress-fill-mini" style="width: ${data.tasks.length > 0 ? (data.tasks.filter(t => t.progress > 0).length / data.tasks.length) * 100 : 0}%; background: ${data.color}"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="kanban-content">
                         ${data.tasks.length > 0 ? data.tasks.map(task => createKanbanCard(task)).join('') : 
-                            '<div class="empty-state-small">Keine Aufgaben in dieser Priorität</div>'}
+                            '<div class="empty-state-small">Keine Aufgaben in dieser Priorität<br><button class="btn btn-sm btn-primary" onclick="window.TaskManager.showNewTaskDialog()">+ Aufgabe hinzufügen</button></div>'}
                     </div>
                 </div>
             `).join('')}
@@ -399,7 +413,7 @@ function updateKanbanView() {
     `;
 }
 
-// Listen-Ansicht aktualisieren
+// Listen-Ansicht aktualisieren (nach Gruppen)
 function updateListView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
@@ -439,10 +453,20 @@ function updateListView() {
                     <div class="list-group">
                         <div class="list-group-header">
                             <div class="list-group-title">
-                                <span style="color: ${groupData.group.color}">●</span>
-                                <span>${groupData.group.name}</span>
+                                <span class="group-color-dot" style="background: ${groupData.group.color}"></span>
+                                <span class="group-name">${groupData.group.name}</span>
+                                <span class="list-group-count">${groupData.tasks.length}</span>
                             </div>
-                            <span class="list-group-count">${groupData.tasks.length}</span>
+                            <div class="list-group-stats">
+                                <span class="stat-item">
+                                    <span class="stat-icon">✓</span>
+                                    <span>${groupData.tasks.filter(t => t.completed).length} erledigt</span>
+                                </span>
+                                <span class="stat-item">
+                                    <span class="stat-icon">⚡</span>
+                                    <span>${groupData.tasks.filter(t => t.priority === 'high').length} hoch</span>
+                                </span>
+                            </div>
                         </div>
                         <div class="list-group-content">
                             ${groupData.tasks.map(task => createListItem(task)).join('')}
@@ -454,7 +478,7 @@ function updateListView() {
                     <div class="empty-icon">📋</div>
                     <h3>Keine Aufgaben gefunden</h3>
                     <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
-                    <button class="btn btn-primary" onclick="showNewTaskDialog()">
+                    <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
                         <span class="icon">+</span> Neue Aufgabe
                     </button>
                 </div>
@@ -463,38 +487,94 @@ function updateListView() {
     `;
 }
 
-// Kanban-Karte erstellen
+// Grid/Raster-Ansicht (nach Gruppen sortiert)
+function updateGridView() {
+    const container = document.getElementById('tasksContainer');
+    if (!container) return;
+    
+    const groupFilter = document.getElementById('groupFilter');
+    const searchInput = document.getElementById('searchInput');
+    
+    const groupId = groupFilter ? groupFilter.value : '';
+    const searchTerm = searchInput ? searchInput.value : '';
+    
+    let filteredTasks = filterTasks(searchTerm, groupId);
+    
+    // Nach Gruppen sortieren, dann nach Priorität
+    filteredTasks.sort((a, b) => {
+        // Erst nach Gruppe sortieren
+        const groupA = window.GroupManager.getGroupById(a.groupId);
+        const groupB = window.GroupManager.getGroupById(b.groupId);
+        const groupComparison = (groupA?.name || '').localeCompare(groupB?.name || '');
+        
+        if (groupComparison !== 0) return groupComparison;
+        
+        // Dann nach Priorität (high -> medium -> low)
+        const priorityOrder = { high: 3, medium: 2, low: 1 };
+        return priorityOrder[b.priority] - priorityOrder[a.priority];
+    });
+    
+    container.innerHTML = '';
+    
+    if (filteredTasks.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📝</div>
+                <h3>Keine Aufgaben gefunden</h3>
+                <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
+                <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
+                    <span class="icon">+</span> Neue Aufgabe
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    // Grid Container für Raster-Ansicht
+    const gridContainer = document.createElement('div');
+    gridContainer.className = 'tasks-grid';
+    
+    filteredTasks.forEach(task => {
+        const taskCard = createTaskCard(task);
+        gridContainer.appendChild(taskCard);
+    });
+    
+    container.appendChild(gridContainer);
+}
+
+// Kanban-Karte erstellen (mit Fokus-Button)
 function createKanbanCard(task) {
     const group = window.GroupManager.getGroupById(task.groupId);
     const groupName = group ? group.name : 'Unbekannt';
     const groupColor = group ? group.color : '#666';
     
     return `
-        <div class="kanban-card priority-${task.priority}" onclick="openTaskEditor('${task.id}')">
+        <div class="kanban-card priority-${task.priority}" data-task-id="${task.id}">
             <div class="card-header">
+                <div class="card-group-indicator" style="background: ${groupColor}"></div>
                 <div class="card-actions">
-                    <button class="card-action" onclick="event.stopPropagation(); openTaskEditor('${task.id}')" title="Bearbeiten">
+                    <button class="card-action focus-btn" onclick="event.stopPropagation(); window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">
+                        🎯
+                    </button>
+                    <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.openTaskEditor('${task.id}')" title="Bearbeiten">
                         ✏️
                     </button>
-                    <button class="card-action" onclick="event.stopPropagation(); completeTask('${task.id}')" title="Als erledigt markieren">
+                    <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.completeTask('${task.id}')" title="Als erledigt markieren">
                         ✓
-                    </button>
-                    <button class="card-action" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Löschen">
-                        🗑️
                     </button>
                 </div>
             </div>
             
-            <h4 class="card-title">${task.title}</h4>
+            <h4 class="card-title" onclick="window.TaskManager.openTaskEditor('${task.id}')">${task.title}</h4>
             
-            ${task.description ? `<div class="card-content">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
+            ${task.description ? `<div class="card-content" onclick="window.TaskManager.openTaskEditor('${task.id}')">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
             
             ${task.subtasks && task.subtasks.length > 0 ? `
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${task.progress || 0}%"></div>
-                </div>
-                <div class="subtasks-preview">
-                    ${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length} Subtasks erledigt
+                <div class="card-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${task.progress || 0}%"></div>
+                    </div>
+                    <span class="progress-text">${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
                 </div>
             ` : ''}
             
@@ -517,76 +597,46 @@ function createKanbanCard(task) {
     `;
 }
 
-// Listen-Item erstellen
+// Listen-Item erstellen (mit Fokus-Button)
 function createListItem(task) {
     const group = window.GroupManager.getGroupById(task.groupId);
     const groupName = group ? group.name : 'Unbekannt';
     
     return `
-        <div class="list-item" onclick="openTaskEditor('${task.id}')">
+        <div class="list-item" data-task-id="${task.id}">
             <div class="list-item-priority ${task.priority}"></div>
-            <div class="list-item-content">
+            <div class="list-item-content" onclick="window.TaskManager.openTaskEditor('${task.id}')">
                 <div class="list-item-title">${task.title}</div>
                 <div class="list-item-meta">
-                    <span>📋 ${groupName}</span>
+                    <span class="meta-item">📋 ${groupName}</span>
                     ${task.subtasks && task.subtasks.length > 0 ? `
-                        <span>✓ ${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
+                        <span class="meta-item">✓ ${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
                     ` : ''}
                     ${task.tags && task.tags.length > 0 ? `
-                        <span>🏷️ ${task.tags.slice(0, 2).join(', ')}${task.tags.length > 2 ? '...' : ''}</span>
+                        <span class="meta-item">🏷️ ${task.tags.slice(0, 2).join(', ')}${task.tags.length > 2 ? '...' : ''}</span>
                     ` : ''}
-                    <span>📅 ${window.StorageManager.formatDate(task.createdAt)}</span>
+                    <span class="meta-item">📅 ${window.StorageManager.formatDate(task.createdAt)}</span>
                 </div>
             </div>
             <div class="list-item-actions">
-                <button class="card-action" onclick="event.stopPropagation(); openTaskEditor('${task.id}')" title="Bearbeiten">
+                <button class="card-action focus-btn" onclick="event.stopPropagation(); window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">
+                    🎯
+                </button>
+                <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.openTaskEditor('${task.id}')" title="Bearbeiten">
                     ✏️
                 </button>
-                <button class="card-action" onclick="event.stopPropagation(); completeTask('${task.id}')" title="Als erledigt markieren">
+                <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.completeTask('${task.id}')" title="Als erledigt markieren">
                     ✓
                 </button>
-                <button class="card-action" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Löschen">
+                <button class="card-action danger" onclick="event.stopPropagation(); window.TaskManager.deleteTask('${task.id}')" title="Löschen">
                     🗑️
                 </button>
             </div>
         </div>
     `;
 }
-function updateTasksContainer() {
-    const container = document.getElementById('tasksContainer');
-    if (!container) return;
-    
-    const groupFilter = document.getElementById('groupFilter');
-    const searchInput = document.getElementById('searchInput');
-    
-    const groupId = groupFilter ? groupFilter.value : '';
-    const searchTerm = searchInput ? searchInput.value : '';
-    
-    const filteredTasks = filterTasks(searchTerm, groupId);
-    
-    container.innerHTML = '';
-    
-    if (filteredTasks.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">📝</div>
-                <h3>Keine Aufgaben gefunden</h3>
-                <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
-                <button class="btn btn-primary" onclick="showNewTaskDialog()">
-                    <span class="icon">+</span> Neue Aufgabe
-                </button>
-            </div>
-        `;
-        return;
-    }
-    
-    filteredTasks.forEach(task => {
-        const taskCard = createTaskCard(task);
-        container.appendChild(taskCard);
-    });
-}
 
-// Aufgaben-Karte erstellen
+// Aufgaben-Karte erstellen (für Grid-Ansicht mit Fokus-Button)
 function createTaskCard(task) {
     const group = window.GroupManager.getGroupById(task.groupId);
     const groupName = group ? group.name : 'Unbekannt';
@@ -612,13 +662,16 @@ function createTaskCard(task) {
         <div class="card-header">
             <div class="card-priority" style="background-color: ${priorityColors[task.priority]}"></div>
             <div class="card-actions">
-                <button class="card-action" onclick="openTaskEditor('${task.id}')" title="Bearbeiten">
+                <button class="card-action focus-btn" onclick="window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">
+                    🎯
+                </button>
+                <button class="card-action" onclick="window.TaskManager.openTaskEditor('${task.id}')" title="Bearbeiten">
                     ✏️
                 </button>
-                <button class="card-action" onclick="completeTask('${task.id}')" title="Als erledigt markieren">
+                <button class="card-action" onclick="window.TaskManager.completeTask('${task.id}')" title="Als erledigt markieren">
                     ✓
                 </button>
-                <button class="card-action" onclick="deleteTask('${task.id}')" title="Löschen">
+                <button class="card-action danger" onclick="window.TaskManager.deleteTask('${task.id}')" title="Löschen">
                     🗑️
                 </button>
             </div>
@@ -706,24 +759,23 @@ function updateDashboardStats() {
     }
 }
 
-// Aufgaben-Editor öffnen
+// Aufgaben-Editor öffnen (verwende einheitliche Bearbeitungskomponente)
 function openTaskEditor(taskId) {
     const task = getTaskById(taskId);
     if (!task) return;
     
-    // Für jetzt verwenden wir den Popup-Editor
-    // Später kann das in den Fokus-Modus integriert werden
-    showTaskEditDialog(task);
+    // Verwende neuen unified Task Editor
+    window.TaskEditorManager.showTaskEditor(task);
 }
 
 // Neue Aufgabe Dialog
 function showNewTaskDialog() {
-    window.PopupManager.showTaskDialog();
+    window.TaskEditorManager.showTaskEditor();
 }
 
 // Aufgabe bearbeiten Dialog
 function showTaskEditDialog(task) {
-    window.PopupManager.showTaskDialog(task);
+    window.TaskEditorManager.showTaskEditor(task);
 }
 
 // Exportiere globale Funktionen
@@ -751,7 +803,11 @@ window.TaskManager = {
     updateTasksUI,
     updateKanbanView,
     updateListView,
+    updateGridView,
     openTaskEditor,
     showNewTaskDialog,
-    showTaskEditDialog
+    showTaskEditDialog,
+    syncViewMode,
+    get currentViewMode() { return currentViewMode; },
+    set currentViewMode(mode) { currentViewMode = mode; }
 };

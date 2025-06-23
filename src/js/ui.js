@@ -4,7 +4,7 @@
 if (typeof window.FokusUI === 'undefined') {
     window.FokusUI = {
         currentTab: 'dashboard',
-        currentViewMode: 'grid', // 'grid', 'kanban', 'list'
+        currentViewMode: 'kanban', // Standard auf Kanban
         searchTimeout: null,
         initialized: false
     };
@@ -25,7 +25,7 @@ function initializeUI() {
         
         setupNavigation();
         setupSearch();
-        setupViewToggle();
+        setupViewToggles();
         setupEventListeners();
         loadUISettings();
         updateAllViews();
@@ -344,107 +344,155 @@ function clearSearchResults() {
     updateDashboard();
 }
 
-// View-Toggle einrichten
-function setupViewToggle() {
-    const viewToggle = document.getElementById('viewToggle');
-    if (viewToggle) {
-        console.log('✅ View-Toggle gefunden');
-        viewToggle.addEventListener('click', (e) => {
-            e.preventDefault();
-            toggleViewMode();
+// View-Toggles einrichten (neue Version mit separaten Buttons)
+function setupViewToggles() {
+    console.log('🔄 Richte View-Toggle-Buttons ein...');
+    
+    // Warte kurz, damit alle DOM-Elemente geladen sind
+    setTimeout(() => {
+        const viewToggles = document.querySelectorAll('.view-toggle');
+        console.log(`✅ ${viewToggles.length} View-Toggle-Buttons gefunden`);
+        
+        if (viewToggles.length === 0) {
+            console.warn('⚠️ Keine View-Toggle-Buttons gefunden');
+            return;
+        }
+        
+        viewToggles.forEach((toggle, index) => {
+            const viewMode = toggle.dataset.view;
+            console.log(`🔄 Button ${index + 1}: data-view="${viewMode}"`);
+            
+            toggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('🔄 View-Toggle geklickt:', viewMode);
+                
+                if (viewMode) {
+                    setViewMode(viewMode);
+                } else {
+                    console.warn('⚠️ Kein data-view Attribut gefunden');
+                }
+            });
         });
-        updateViewToggleIcon();
-    } else {
-        console.warn('⚠️ View-Toggle nicht gefunden');
-    }
+        
+        updateViewToggleButtons();
+    }, 200);
 }
 
-// Ansichtsmodus wechseln
-function toggleViewMode() {
-    // Zyklisch durch die Modi wechseln: grid -> kanban -> list -> grid
-    switch (UI.currentViewMode) {
-        case 'grid':
-            UI.currentViewMode = 'kanban';
-            break;
-        case 'kanban':
-            UI.currentViewMode = 'list';
-            break;
-        case 'list':
-            UI.currentViewMode = 'grid';
-            break;
-        default:
-            UI.currentViewMode = 'grid';
+// Ansichtsmodus setzen
+function setViewMode(viewMode) {
+    if (!['kanban', 'list', 'grid'].includes(viewMode)) {
+        console.warn('Ungültiger View-Modus:', viewMode);
+        return;
     }
     
-    console.log('View-Modus gewechselt zu:', UI.currentViewMode);
+    console.log('🔄 View-Modus gewechselt von', UI.currentViewMode, 'zu', viewMode);
+    UI.currentViewMode = viewMode;
     updateViewMode();
     saveUISettings();
 }
 
 // Ansichtsmodus aktualisieren
 function updateViewMode() {
-    const containers = document.querySelectorAll('.content-grid');
-    containers.forEach(container => {
-        container.classList.remove('list-view', 'kanban-view');
-        
-        if (UI.currentViewMode === 'list') {
-            container.classList.add('list-view');
-        } else if (UI.currentViewMode === 'kanban') {
-            container.classList.add('kanban-view');
-        }
-    });
+    console.log('🔄 Aktualisiere View-Modus:', UI.currentViewMode);
     
-    updateViewToggleIcon();
+    updateViewToggleButtons();
+    updateContainerClasses();
     
     // UI für aktuellen Tab aktualisieren
     if (UI.currentTab === 'tasks' && window.TaskManager) {
+        console.log('🔄 Aktualisiere Tasks UI mit Modus:', UI.currentViewMode);
+        // Force TaskManager to use the current view mode
+        window.TaskManager.currentViewMode = UI.currentViewMode;
         window.TaskManager.updateTasksUI();
     }
 }
 
-// View-Toggle Icon aktualisieren
-function updateViewToggleIcon() {
-    const viewToggle = document.getElementById('viewToggle');
-    if (viewToggle) {
-        const icon = viewToggle.querySelector('.icon');
-        if (icon) {
-            switch (UI.currentViewMode) {
-                case 'grid':
-                    icon.textContent = '⊞';
-                    viewToggle.title = 'Zur Kanban-Ansicht wechseln';
-                    break;
-                case 'kanban':
-                    icon.textContent = '☰';
-                    viewToggle.title = 'Zur Listen-Ansicht wechseln';
-                    break;
-                case 'list':
-                    icon.textContent = '⋮';
-                    viewToggle.title = 'Zur Raster-Ansicht wechseln';
-                    break;
-            }
+// Container-Klassen für View-Modi aktualisieren
+function updateContainerClasses() {
+    const tasksContainer = document.getElementById('tasksContainer');
+    if (!tasksContainer) return;
+    
+    // Entferne alle View-Klassen
+    tasksContainer.classList.remove('kanban-view', 'list-view', 'grid-view');
+    
+    // Füge aktuelle View-Klasse hinzu
+    tasksContainer.classList.add(`${UI.currentViewMode}-view`);
+    
+    console.log('🔄 Container-Klassen aktualisiert:', `${UI.currentViewMode}-view`);
+}
+
+// View-Toggle Buttons aktualisieren
+function updateViewToggleButtons() {
+    const viewToggles = document.querySelectorAll('.view-toggle');
+    console.log('🔄 Aktualisiere', viewToggles.length, 'View-Toggle-Buttons, aktueller Modus:', UI.currentViewMode);
+    
+    viewToggles.forEach(toggle => {
+        const viewMode = toggle.dataset.view;
+        if (viewMode === UI.currentViewMode) {
+            toggle.classList.add('active');
+            console.log('🔄 Button aktiviert:', viewMode);
+        } else {
+            toggle.classList.remove('active');
         }
-    }
+    });
 }
 
 // Event Listeners einrichten
 function setupEventListeners() {
     console.log('🔗 Richte Event-Listeners ein...');
     
+    // Robuste Handler-Funktionen
+    const safeTaskEditorShow = () => {
+        if (window.TaskEditorManager && window.TaskEditorManager.showTaskEditor) {
+            window.TaskEditorManager.showTaskEditor();
+        } else {
+            console.warn('⚠️ TaskEditorManager nicht verfügbar');
+            alert('Task-Editor ist momentan nicht verfügbar. Bitte versuchen Sie es später erneut.');
+        }
+    };
+    
+    const safeNoteDialogShow = () => {
+        if (window.NoteManager && window.NoteManager.showNewNoteDialog) {
+            window.NoteManager.showNewNoteDialog();
+        } else {
+            console.warn('⚠️ NoteManager nicht verfügbar');
+            alert('Notiz-Editor ist momentan nicht verfügbar. Bitte versuchen Sie es später erneut.');
+        }
+    };
+    
+    const safeGroupDialogShow = () => {
+        if (window.GroupManager && window.GroupManager.showNewGroupDialog) {
+            window.GroupManager.showNewGroupDialog();
+        } else {
+            console.warn('⚠️ GroupManager nicht verfügbar');
+            alert('Gruppen-Editor ist momentan nicht verfügbar. Bitte versuchen Sie es später erneut.');
+        }
+    };
+    
     // Header-Buttons
     const buttons = [
-        { id: 'newTaskBtn', handler: () => window.TaskManager?.showNewTaskDialog?.() },
-        { id: 'newNoteBtn', handler: () => window.NoteManager?.showNewNoteDialog?.() },
+        { id: 'newTaskBtn', handler: safeTaskEditorShow },
+        { id: 'newNoteBtn', handler: safeNoteDialogShow },
         { id: 'focusModeBtn', handler: handleFocusMode },
-        { id: 'newGroupBtn', handler: () => window.GroupManager?.showNewGroupDialog?.() }
+        { id: 'newGroupBtn', handler: safeGroupDialogShow }
     ];
     
     buttons.forEach(({ id, handler }) => {
         const btn = document.getElementById(id);
         if (btn) {
-            btn.addEventListener('click', (e) => {
+            // Entferne bestehende Event-Listener
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 console.log('Button geklickt:', id);
-                handler();
+                try {
+                    handler();
+                } catch (error) {
+                    console.error('Fehler beim Ausführen von Button-Handler:', error);
+                }
             });
             console.log('✅ Event-Listener für', id, 'hinzugefügt');
         } else {
@@ -454,18 +502,27 @@ function setupEventListeners() {
     
     // Quick Actions
     const quickActions = [
-        { id: 'quickTask', handler: () => window.TaskManager?.showNewTaskDialog?.() },
-        { id: 'quickNote', handler: () => window.NoteManager?.showNewNoteDialog?.() },
+        { id: 'quickTask', handler: safeTaskEditorShow },
+        { id: 'quickNote', handler: safeNoteDialogShow },
         { id: 'quickFocus', handler: handleFocusMode }
     ];
     
     quickActions.forEach(({ id, handler }) => {
         const btn = document.getElementById(id);
         if (btn) {
-            btn.addEventListener('click', (e) => {
+            // Entferne bestehende Event-Listener
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            
+            newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 console.log('Quick-Action geklickt:', id);
-                handler();
+                try {
+                    handler();
+                } catch (error) {
+                    console.error('Fehler beim Ausführen von Quick-Action-Handler:', error);
+                }
             });
             console.log('✅ Event-Listener für Quick-Action', id, 'hinzugefügt');
         }
@@ -475,7 +532,7 @@ function setupEventListeners() {
     const groupFilter = document.getElementById('groupFilter');
     if (groupFilter) {
         groupFilter.addEventListener('change', () => {
-            if (window.TaskManager) {
+            if (window.TaskManager && window.TaskManager.updateTasksUI) {
                 window.TaskManager.updateTasksUI();
             }
         });
@@ -544,7 +601,6 @@ function showTaskSelectionForFocus() {
                                 ${task.description ? `<p class="task-selection-desc">${task.description}</p>` : ''}
                                 <div class="task-selection-meta">
                                     <span>⚡ ${task.priority === 'high' ? 'Hoch' : task.priority === 'medium' ? 'Mittel' : 'Niedrig'}</span>
-                                    ${task.estimatedTime ? `<span>⏱️ ${task.estimatedTime} Min</span>` : ''}
                                     ${task.subtasks?.length ? `<span>📋 ${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length} Subtasks</span>` : ''}
                                 </div>
                             </div>
@@ -775,8 +831,10 @@ function loadUISettings() {
             // Validiere den geladenen View-Modus
             if (['grid', 'kanban', 'list'].includes(settings.viewMode)) {
                 UI.currentViewMode = settings.viewMode;
+                console.log('🔄 View-Modus aus Settings geladen:', UI.currentViewMode);
             } else {
-                UI.currentViewMode = 'grid'; // Fallback
+                UI.currentViewMode = 'kanban'; // Fallback auf Kanban
+                console.log('🔄 Ungültiger View-Modus in Settings, verwende Fallback:', UI.currentViewMode);
             }
         }
         updateViewMode();
@@ -793,6 +851,7 @@ function saveUISettings() {
         const settings = window.StorageManager.readDataFile('settings');
         settings.viewMode = UI.currentViewMode;
         window.StorageManager.writeDataFile('settings', settings);
+        console.log('🔄 View-Modus gespeichert:', UI.currentViewMode);
     } catch (error) {
         console.error('Fehler beim Speichern der UI-Einstellungen:', error);
     }
@@ -851,7 +910,7 @@ function handleUrlNavigation() {
 window.UIManager = {
     initializeUI,
     switchTab,
-    toggleViewMode,
+    setViewMode,
     updateAllViews,
     updateDashboard,
     updateArchive,
