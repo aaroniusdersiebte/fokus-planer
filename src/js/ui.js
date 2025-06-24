@@ -5,6 +5,9 @@ if (typeof window.FokusUI === 'undefined') {
     window.FokusUI = {
         currentTab: 'dashboard',
         currentViewMode: 'kanban', // Standard auf Kanban
+        currentSortMode: 'groups', // 'groups' oder 'priority'
+        currentFilterGroup: '',
+        currentFilterPriority: '',
         searchTimeout: null,
         initialized: false
     };
@@ -531,12 +534,41 @@ function setupEventListeners() {
     // Gruppen-Filter
     const groupFilter = document.getElementById('groupFilter');
     if (groupFilter) {
-        groupFilter.addEventListener('change', () => {
+        groupFilter.addEventListener('change', (e) => {
+            UI.currentFilterGroup = e.target.value;
+            saveUISettings();
             if (window.TaskManager && window.TaskManager.updateTasksUI) {
                 window.TaskManager.updateTasksUI();
             }
         });
         console.log('✅ Event-Listener für Gruppen-Filter hinzugefügt');
+    }
+    
+    // Prioritäts-Filter
+    const priorityFilter = document.getElementById('priorityFilter');
+    if (priorityFilter) {
+        priorityFilter.addEventListener('change', (e) => {
+            UI.currentFilterPriority = e.target.value;
+            saveUISettings();
+            if (window.TaskManager && window.TaskManager.updateTasksUI) {
+                window.TaskManager.updateTasksUI();
+            }
+        });
+        console.log('✅ Event-Listener für Prioritäts-Filter hinzugefügt');
+    }
+    
+    // Sort-Modus Toggle
+    const sortToggle = document.getElementById('sortToggle');
+    if (sortToggle) {
+        sortToggle.addEventListener('click', () => {
+            UI.currentSortMode = UI.currentSortMode === 'groups' ? 'priority' : 'groups';
+            updateSortToggleButton();
+            saveUISettings();
+            if (window.TaskManager && window.TaskManager.updateTasksUI) {
+                window.TaskManager.updateTasksUI();
+            }
+        });
+        console.log('✅ Event-Listener für Sort-Toggle hinzugefügt');
     }
     
     // Archiv-Aktionen
@@ -641,6 +673,8 @@ function updateDashboard() {
     console.log('📊 Aktualisiere Dashboard...');
     updateDashboardStats();
     updateRecentTasks();
+    updateRecentNotes();
+    updateFocusActivity();
 }
 
 // Dashboard-Statistiken aktualisieren
@@ -667,12 +701,240 @@ function updateDashboardStats() {
 
 // Letzte Aufgaben aktualisieren
 function updateRecentTasks() {
-    if (window.TaskManager && window.TaskManager.updateTasksUI) {
-        // Aktualisiere speziell den recentTasks Container
-        const container = document.getElementById('recentTasks');
-        if (container && window.TaskManager.updateRecentTasksContainer) {
-            window.TaskManager.updateRecentTasksContainer();
+    const container = document.getElementById('recentTasks');
+    if (!container || !window.StorageManager) return;
+    
+    try {
+        const tasks = window.StorageManager.readDataFile('tasks');
+        const recentTasks = tasks
+            .filter(task => !task.completed)
+            .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+            .slice(0, 4);
+        
+        container.innerHTML = '';
+        
+        if (recentTasks.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state-small">
+                    <p>Keine aktuellen Aufgaben vorhanden.</p>
+                    <button class="btn btn-sm btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
+                        + Aufgabe erstellen
+                    </button>
+                </div>
+            `;
+            return;
         }
+        
+        recentTasks.forEach(task => {
+            const group = window.GroupManager?.getGroupById?.(task.groupId);
+            const taskCard = document.createElement('div');
+            taskCard.className = 'dashboard-task-card';
+            taskCard.innerHTML = `
+                <div class="task-card-priority ${task.priority}"></div>
+                <div class="task-card-content" onclick="window.TaskManager.openTaskEditor('${task.id}')">
+                    <h4 class="task-card-title">${task.title}</h4>
+                    <div class="task-card-meta">
+                        <span class="task-group" style="color: ${group?.color || '#666'}">${group?.name || 'Unbekannt'}</span>
+                        <span class="task-updated">${window.StorageManager.formatDate(task.updatedAt)}</span>
+                    </div>
+                    ${task.subtasks && task.subtasks.length > 0 ? `
+                        <div class="task-progress-mini">
+                            <div class="progress-bar-mini">
+                                <div class="progress-fill-mini" style="width: ${task.progress || 0}%"></div>
+                            </div>
+                            <span class="progress-text-mini">${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="task-card-actions">
+                    <button class="btn-icon-small" onclick="event.stopPropagation(); window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">🎯</button>
+                    <button class="btn-icon-small" onclick="event.stopPropagation(); window.TaskManager.completeTask('${task.id}')" title="Erledigt">✓</button>
+                </div>
+            `;
+            container.appendChild(taskCard);
+        });
+    } catch (error) {
+        console.error('Fehler beim Aktualisieren der letzten Aufgaben:', error);
+        container.innerHTML = '<div class="error-state">Fehler beim Laden der Aufgaben</div>';
+    }
+}
+
+// Letzte Notizen aktualisieren
+function updateRecentNotes() {
+    const container = document.getElementById('recentNotes');
+    if (!container || !window.StorageManager) return;
+    
+    try {
+        const notes = window.StorageManager.readDataFile('notes');
+        const recentNotes = notes
+            .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+            .slice(0, 4);
+        
+        container.innerHTML = '';
+        
+        if (recentNotes.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state-small">
+                    <p>Keine Notizen vorhanden.</p>
+                    <button class="btn btn-sm btn-primary" onclick="window.NoteManager.showNewNoteDialog()">
+                        + Notiz erstellen
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        recentNotes.forEach(note => {
+            const noteCard = document.createElement('div');
+            noteCard.className = 'dashboard-note-card';
+            if (note.pinned) noteCard.classList.add('pinned');
+            
+            noteCard.innerHTML = `
+                <div class="note-card-content" onclick="window.NoteManager.editNote('${note.id}')">
+                    ${note.pinned ? '<div class="pin-indicator-mini">📌</div>' : ''}
+                    <h4 class="note-card-title">${note.title}</h4>
+                    <p class="note-card-preview">${(note.content || '').substring(0, 80)}${note.content && note.content.length > 80 ? '...' : ''}</p>
+                    <div class="note-card-meta">
+                        <span class="note-updated">${window.StorageManager.formatDate(note.updatedAt)}</span>
+                        ${note.tags && note.tags.length > 0 ? `
+                            <div class="note-tags-mini">
+                                ${note.tags.slice(0, 2).map(tag => `<span class="tag-mini">${tag}</span>`).join('')}
+                                ${note.tags.length > 2 ? `<span class="tag-mini">+${note.tags.length - 2}</span>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="note-card-actions">
+                    <button class="btn-icon-small" onclick="event.stopPropagation(); window.NoteManager.togglePinNote('${note.id}')" title="${note.pinned ? 'Lösen' : 'Anheften'}">
+                        ${note.pinned ? '📌' : '📍'}
+                    </button>
+                    <button class="btn-icon-small" onclick="event.stopPropagation(); window.NoteManager.showConvertNoteDialog('${note.id}')" title="In Aufgabe umwandeln">✓</button>
+                </div>
+            `;
+            container.appendChild(noteCard);
+        });
+    } catch (error) {
+        console.error('Fehler beim Aktualisieren der letzten Notizen:', error);
+        container.innerHTML = '<div class="error-state">Fehler beim Laden der Notizen</div>';
+    }
+}
+
+// Fokus-Aktivität aktualisieren
+function updateFocusActivity() {
+    const container = document.getElementById('focusActivity');
+    if (!container || !window.StorageManager) return;
+    
+    try {
+        const stats = window.StorageManager.readDataFile('stats');
+        const todayStats = window.StorageManager.getTodayStats();
+        
+        // Aktuelle Fokus-Session prüfen
+        const currentSession = window.FocusManager?.getCurrentFocusSession?.();
+        
+        container.innerHTML = `
+            <div class="focus-stats">
+                <div class="focus-stat-item">
+                    <div class="focus-stat-number">${todayStats.focusTime || 0}</div>
+                    <div class="focus-stat-label">Min heute</div>
+                </div>
+                <div class="focus-stat-item">
+                    <div class="focus-stat-number">${Math.round((stats.totalFocusTime || 0) / 60)}</div>
+                    <div class="focus-stat-label">Std gesamt</div>
+                </div>
+                <div class="focus-stat-item">
+                    <div class="focus-stat-number">${todayStats.completedTasks || 0}</div>
+                    <div class="focus-stat-label">Erledigt</div>
+                </div>
+            </div>
+            
+            ${currentSession && currentSession.isActive ? `
+                <div class="active-focus-session">
+                    <div class="session-header">
+                        <span class="session-indicator">🎯</span>
+                        <span class="session-title">Aktive Session</span>
+                    </div>
+                    <div class="session-task">${currentSession.taskTitle || 'Allgemeine Fokus-Session'}</div>
+                    <div class="session-timer" id="sessionTimer">
+                        ${formatSessionTime(currentSession.remainingTime || 0)}
+                    </div>
+                    <div class="session-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="window.FocusManager.toggleFocusSession()">
+                            ${currentSession.isPaused ? '▶️ Fortsetzen' : '⏸️ Pausieren'}
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="window.FocusManager.stopFocusSession()">
+                            ⏹️ Stoppen
+                        </button>
+                    </div>
+                </div>
+            ` : `
+                <div class="focus-suggestions">
+                    <h4>Bereit für Fokus?</h4>
+                    <p>Starten Sie eine 20-Minuten Session für maximale Produktivität.</p>
+                    <div class="recent-focus-tasks" id="recentFocusTasks">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                </div>
+            `}
+        `;
+        
+        // Timer für aktive Session aktualisieren
+        if (currentSession && currentSession.isActive) {
+            updateSessionTimer();
+        } else {
+            updateRecentFocusTasks();
+        }
+    } catch (error) {
+        console.error('Fehler beim Aktualisieren der Fokus-Aktivität:', error);
+        container.innerHTML = '<div class="error-state">Fehler beim Laden der Fokus-Daten</div>';
+    }
+}
+
+// Session-Timer formatieren
+function formatSessionTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Session-Timer aktualisieren
+function updateSessionTimer() {
+    const timerElement = document.getElementById('sessionTimer');
+    if (!timerElement) return;
+    
+    const currentSession = window.FocusManager?.getCurrentFocusSession?.();
+    if (currentSession && currentSession.isActive && !currentSession.isPaused) {
+        timerElement.textContent = formatSessionTime(currentSession.remainingTime || 0);
+        
+        setTimeout(() => {
+            updateSessionTimer();
+        }, 1000);
+    }
+}
+
+// Letzte Fokus-Aufgaben aktualisieren
+function updateRecentFocusTasks() {
+    const container = document.getElementById('recentFocusTasks');
+    if (!container || !window.StorageManager) return;
+    
+    try {
+        const tasks = window.StorageManager.readDataFile('tasks');
+        const focusTasks = tasks
+            .filter(task => !task.completed && task.priority === 'high')
+            .slice(0, 2);
+        
+        if (focusTasks.length === 0) {
+            container.innerHTML = '<p class="focus-hint">Keine priorisierten Aufgaben verfügbar.</p>';
+            return;
+        }
+        
+        container.innerHTML = focusTasks.map(task => `
+            <div class="focus-task-suggestion" onclick="window.FocusManager.startFocusSession('${task.id}')">
+                <span class="focus-task-title">${task.title}</span>
+                <span class="focus-task-priority">🔴</span>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Fehler beim Laden der Fokus-Aufgaben:', error);
     }
 }
 
@@ -837,6 +1099,16 @@ function loadUISettings() {
                 console.log('🔄 Ungültiger View-Modus in Settings, verwende Fallback:', UI.currentViewMode);
             }
         }
+        
+        // Lade Sort-Modus
+        if (settings.sortMode) {
+            UI.currentSortMode = ['groups', 'priority'].includes(settings.sortMode) ? settings.sortMode : 'groups';
+        }
+        
+        // Lade Filter-Einstellungen
+        if (settings.filterGroup) UI.currentFilterGroup = settings.filterGroup;
+        if (settings.filterPriority) UI.currentFilterPriority = settings.filterPriority;
+        
         updateViewMode();
     } catch (error) {
         console.error('Fehler beim Laden der UI-Einstellungen:', error);
@@ -850,8 +1122,15 @@ function saveUISettings() {
     try {
         const settings = window.StorageManager.readDataFile('settings');
         settings.viewMode = UI.currentViewMode;
+        settings.sortMode = UI.currentSortMode;
+        settings.filterGroup = UI.currentFilterGroup;
+        settings.filterPriority = UI.currentFilterPriority;
         window.StorageManager.writeDataFile('settings', settings);
-        console.log('🔄 View-Modus gespeichert:', UI.currentViewMode);
+        console.log('🔄 UI-Einstellungen gespeichert:', {
+            viewMode: UI.currentViewMode,
+            sortMode: UI.currentSortMode,
+            filters: { group: UI.currentFilterGroup, priority: UI.currentFilterPriority }
+        });
     } catch (error) {
         console.error('Fehler beim Speichern der UI-Einstellungen:', error);
     }
@@ -906,6 +1185,58 @@ function handleUrlNavigation() {
     }
 }
 
+// Sort-Toggle Button aktualisieren
+function updateSortToggleButton() {
+    const sortToggle = document.getElementById('sortToggle');
+    if (sortToggle) {
+        const icon = UI.currentSortMode === 'groups' ? '📁' : '⚡';
+        const text = UI.currentSortMode === 'groups' ? 'Nach Gruppen' : 'Nach Priorität';
+        sortToggle.innerHTML = `<span class="icon">${icon}</span> ${text}`;
+        sortToggle.title = `Aktuell sortiert ${text.toLowerCase()}, klicken zum Umschalten`;
+    }
+}
+
+// Filter zurücksetzen
+function resetFilters() {
+    UI.currentFilterGroup = '';
+    UI.currentFilterPriority = '';
+    
+    const groupFilter = document.getElementById('groupFilter');
+    const priorityFilter = document.getElementById('priorityFilter');
+    
+    if (groupFilter) groupFilter.value = '';
+    if (priorityFilter) priorityFilter.value = '';
+    
+    saveUISettings();
+    
+    if (window.TaskManager && window.TaskManager.updateTasksUI) {
+        window.TaskManager.updateTasksUI();
+    }
+}
+
+// Filter-Werte setzen
+function setFilters(groupId = '', priority = '') {
+    UI.currentFilterGroup = groupId;
+    UI.currentFilterPriority = priority;
+    
+    const groupFilter = document.getElementById('groupFilter');
+    const priorityFilter = document.getElementById('priorityFilter');
+    
+    if (groupFilter) groupFilter.value = groupId;
+    if (priorityFilter) priorityFilter.value = priority;
+    
+    saveUISettings();
+}
+
+// Aktuelle Filter abrufen
+function getCurrentFilters() {
+    return {
+        group: UI.currentFilterGroup,
+        priority: UI.currentFilterPriority,
+        sortMode: UI.currentSortMode
+    };
+}
+
 // Exportiere globale Funktionen
 window.UIManager = {
     initializeUI,
@@ -920,7 +1251,12 @@ window.UIManager = {
     handleUrlNavigation,
     saveUISettings,
     loadUISettings,
-    currentViewMode: () => UI.currentViewMode
+    resetFilters,
+    setFilters,
+    getCurrentFilters,
+    updateSortToggleButton,
+    currentViewMode: () => UI.currentViewMode,
+    currentSortMode: () => UI.currentSortMode
 };
 
 // Globale Funktionen für HTML onclick Events

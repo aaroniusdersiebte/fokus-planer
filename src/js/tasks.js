@@ -181,12 +181,17 @@ function getTaskById(taskId) {
 }
 
 // Aufgaben filtern
-function filterTasks(searchTerm = '', groupId = '') {
+function filterTasks(searchTerm = '', groupId = '', priority = '') {
     let filteredTasks = tasks;
     
     // Nach Gruppe filtern
     if (groupId) {
         filteredTasks = filteredTasks.filter(task => task.groupId === groupId);
+    }
+    
+    // Nach Priorität filtern
+    if (priority) {
+        filteredTasks = filteredTasks.filter(task => task.priority === priority);
     }
     
     // Nach Suchbegriff filtern
@@ -368,15 +373,87 @@ function updateKanbanView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
     
-    const groupFilter = document.getElementById('groupFilter');
+    const filters = window.UIManager ? window.UIManager.getCurrentFilters() : { group: '', priority: '', sortMode: 'groups' };
     const searchInput = document.getElementById('searchInput');
-    
-    const groupId = groupFilter ? groupFilter.value : '';
     const searchTerm = searchInput ? searchInput.value : '';
     
-    let filteredTasks = filterTasks(searchTerm, groupId);
+    let filteredTasks = filterTasks(searchTerm, filters.group, filters.priority);
     
-    // Nach Priorität gruppieren für Kanban
+    // Entscheide ob nach Gruppen oder Prioritäten gruppiert wird
+    if (filters.sortMode === 'groups') {
+        updateKanbanByGroups(container, filteredTasks);
+    } else {
+        updateKanbanByPriority(container, filteredTasks);
+    }
+}
+
+// Kanban nach Gruppen sortiert
+function updateKanbanByGroups(container, filteredTasks) {
+    const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
+    const tasksByGroup = {};
+    
+    // Initialisiere Gruppen
+    groups.forEach(group => {
+        tasksByGroup[group.id] = {
+            group: group,
+            tasks: []
+        };
+    });
+    
+    // Aufgaben in Gruppen einteilen
+    filteredTasks.forEach(task => {
+        if (tasksByGroup[task.groupId]) {
+            tasksByGroup[task.groupId].tasks.push(task);
+        }
+    });
+    
+    container.innerHTML = `
+        <div class="kanban-container">
+            ${Object.values(tasksByGroup)
+                .filter(groupData => groupData.tasks.length > 0 || groupData.group.id === 'default')
+                .map(groupData => {
+                    const progressStats = calculateGroupProgress(groupData.tasks);
+                    return `
+                        <div class="kanban-column">
+                            <div class="kanban-header">
+                                <div class="kanban-title">
+                                    <span class="kanban-icon" style="color: ${groupData.group.color}">📁</span>
+                                    <span class="kanban-text">${groupData.group.name}</span>
+                                    <span class="kanban-count">${groupData.tasks.length}</span>
+                                </div>
+                                <div class="kanban-progress">
+                                    <div class="progress-mini" style="background: ${groupData.group.color}20">
+                                        <div class="progress-fill-mini" style="width: ${progressStats.progressPercent}%; background: ${groupData.group.color}"></div>
+                                    </div>
+                                    <div class="kanban-stats">
+                                        <span>⚡ ${groupData.tasks.filter(t => t.priority === 'high').length}</span>
+                                        <span>✓ ${progressStats.completedTasks}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="kanban-content">
+                                ${groupData.tasks.length > 0 ? 
+                                    groupData.tasks
+                                        .sort((a, b) => {
+                                            const priorityOrder = { high: 3, medium: 2, low: 1 };
+                                            return priorityOrder[b.priority] - priorityOrder[a.priority];
+                                        })
+                                        .map(task => createKanbanCard(task)).join('') : 
+                                    `<div class="empty-state-small">
+                                        Keine Aufgaben in ${groupData.group.name}
+                                        <br><button class="btn btn-sm btn-primary" onclick="window.TaskManager.showNewTaskDialog()">+ Aufgabe hinzufügen</button>
+                                    </div>`
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+        </div>
+    `;
+}
+
+// Kanban nach Prioritäten sortiert (ursprüngliche Version)
+function updateKanbanByPriority(container, filteredTasks) {
     const priorities = {
         high: { name: 'Hohe Priorität', icon: '🔴', color: '#f44336', tasks: [] },
         medium: { name: 'Mittlere Priorität', icon: '🟡', color: '#ff9800', tasks: [] },
@@ -413,18 +490,29 @@ function updateKanbanView() {
     `;
 }
 
+// Gruppen-Progress berechnen
+function calculateGroupProgress(tasks) {
+    if (tasks.length === 0) {
+        return { progressPercent: 0, completedTasks: 0 };
+    }
+    
+    const completedTasks = tasks.filter(t => t.completed).length;
+    const tasksWithProgress = tasks.filter(t => t.progress > 0).length;
+    const progressPercent = Math.round((tasksWithProgress / tasks.length) * 100);
+    
+    return { progressPercent, completedTasks };
+}
+
 // Listen-Ansicht aktualisieren (nach Gruppen)
 function updateListView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
     
-    const groupFilter = document.getElementById('groupFilter');
+    const filters = window.UIManager ? window.UIManager.getCurrentFilters() : { group: '', priority: '', sortMode: 'groups' };
     const searchInput = document.getElementById('searchInput');
-    
-    const groupId = groupFilter ? groupFilter.value : '';
     const searchTerm = searchInput ? searchInput.value : '';
     
-    let filteredTasks = filterTasks(searchTerm, groupId);
+    let filteredTasks = filterTasks(searchTerm, filters.group, filters.priority);
     
     // Nach Gruppen organisieren
     const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
@@ -492,13 +580,11 @@ function updateGridView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
     
-    const groupFilter = document.getElementById('groupFilter');
+    const filters = window.UIManager ? window.UIManager.getCurrentFilters() : { group: '', priority: '', sortMode: 'groups' };
     const searchInput = document.getElementById('searchInput');
-    
-    const groupId = groupFilter ? groupFilter.value : '';
     const searchTerm = searchInput ? searchInput.value : '';
     
-    let filteredTasks = filterTasks(searchTerm, groupId);
+    let filteredTasks = filterTasks(searchTerm, filters.group, filters.priority);
     
     // Nach Gruppen sortieren, dann nach Priorität
     filteredTasks.sort((a, b) => {

@@ -94,10 +94,35 @@
                     </div>
                 </div>
 
-                <div class="recent-section">
-                    <h3>Letzte Aufgaben</h3>
-                    <div class="content-grid" id="recentTasks">
-                        <!-- Wird dynamisch gefüllt -->
+                <div class="dashboard-sections">
+                    <div class="recent-section">
+                        <div class="section-header">
+                            <h3>Letzte Aufgaben</h3>
+                            <button class="btn btn-sm btn-outline" onclick="window.UIManager.switchTab('tasks')">Alle anzeigen</button>
+                        </div>
+                        <div class="content-grid" id="recentTasks">
+                            <!-- Wird dynamisch gefüllt -->
+                        </div>
+                    </div>
+                    
+                    <div class="recent-section">
+                        <div class="section-header">
+                            <h3>Letzte Notizen</h3>
+                            <button class="btn btn-sm btn-outline" onclick="window.UIManager.switchTab('notes')">Alle anzeigen</button>
+                        </div>
+                        <div class="content-grid" id="recentNotes">
+                            <!-- Wird dynamisch gefüllt -->
+                        </div>
+                    </div>
+                    
+                    <div class="recent-section">
+                        <div class="section-header">
+                            <h3>Fokus-Aktivität</h3>
+                            <button class="btn btn-sm btn-primary" onclick="window.UIManager.handleFocusMode()">Fokus starten</button>
+                        </div>
+                        <div class="focus-activity" id="focusActivity">
+                            <!-- Wird dynamisch gefüllt -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -107,12 +132,28 @@
                 <div class="tab-header">
                     <h2>Alle Aufgaben</h2>
                     <div class="tab-actions">
-                        <select id="groupFilter" class="filter-select">
-                            <option value="">Alle Gruppen</option>
-                        </select>
-                        <button class="btn btn-secondary" id="newGroupBtn">
-                            <span class="icon">+</span> Gruppe
-                        </button>
+                        <div class="filter-controls">
+                            <select id="groupFilter" class="filter-select">
+                                <option value="">Alle Gruppen</option>
+                            </select>
+                            <select id="priorityFilter" class="filter-select">
+                                <option value="">Alle Prioritäten</option>
+                                <option value="high">🔴 Hoch</option>
+                                <option value="medium">🟡 Mittel</option>
+                                <option value="low">🟢 Niedrig</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline" id="sortToggle" title="Sortierung umschalten">
+                                <span class="icon">📁</span> Nach Gruppen
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="window.UIManager.resetFilters()" title="Filter zurücksetzen">
+                                <span class="icon">❌</span> Reset
+                            </button>
+                        </div>
+                        <div class="action-controls">
+                            <button class="btn btn-secondary" id="newGroupBtn">
+                                <span class="icon">+</span> Gruppe
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="content-grid" id="tasksContainer">

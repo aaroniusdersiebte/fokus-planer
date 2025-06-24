@@ -179,56 +179,104 @@ function showNoteDialog(note = null) {
     const title = isEdit ? 'Notiz bearbeiten' : 'Neue Notiz';
     
     const content = `
-        <form id="noteForm" class="note-form">
-            <div class="form-group">
-                <label class="form-label" for="noteTitle">Titel (optional)</label>
-                <input type="text" id="noteTitle" class="form-input" 
-                       value="${isEdit ? note.title : ''}" 
-                       placeholder="Wird automatisch aus dem Inhalt generiert">
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label" for="noteContent">Inhalt *</label>
-                <textarea id="noteContent" class="form-textarea large" 
-                          placeholder="Hier können Sie Ihre Notiz eingeben..."
-                          required autofocus rows="10">${isEdit ? note.content : ''}</textarea>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label" for="noteTags">Tags (kommagetrennt)</label>
-                <input type="text" id="noteTags" class="form-input" 
-                       value="${isEdit ? note.tags.join(', ') : ''}"
-                       placeholder="z.B. idee, wichtig, später">
-            </div>
-            
-            <div class="form-tips">
-                <h4>Formatierungstipps:</h4>
-                <ul>
-                    <li><strong>**fett**</strong> für fetten Text</li>
-                    <li><em>*kursiv*</em> für kursiven Text</li>
-                    <li>Zeilenumbrüche werden automatisch erkannt</li>
-                </ul>
-            </div>
-            
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closePopup()">Abbrechen</button>
-                ${isEdit ? `
-                    <button type="button" class="btn btn-warning" onclick="convertNoteToTaskFromDialog('${note.id}')">
-                        <span class="icon">✓</span> In Aufgabe umwandeln
+        <div class="modern-note-editor">
+            <form id="noteForm" class="modern-note-form">
+                <div class="note-section main-info">
+                    <div class="form-group">
+                        <label class="modern-label" for="noteTitle">
+                            <span class="label-text">📝 Titel</span>
+                            <span class="label-hint">Optional</span>
+                        </label>
+                        <input type="text" id="noteTitle" class="modern-input" 
+                               value="${isEdit ? note.title : ''}" 
+                               placeholder="Wird automatisch aus dem Inhalt generiert">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="modern-label" for="noteContent">
+                            <span class="label-text">✍️ Inhalt <span class="required">*</span></span>
+                        </label>
+                        <textarea id="noteContent" class="modern-textarea note-content-large" 
+                                  placeholder="Hier können Sie Ihre Notiz eingeben...\n\nSie können:\n- **fetten Text** verwenden\n- *kursiven Text* schreiben\n- Einfache Listen erstellen"
+                                  required autofocus rows="12">${isEdit ? note.content : ''}</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="modern-label" for="noteTags">
+                            <span class="label-text">🏷️ Tags</span>
+                            <span class="label-hint">Kommagetrennt</span>
+                        </label>
+                        <div class="tags-input-container">
+                            <input type="text" id="noteTags" class="modern-input" 
+                                   value="${isEdit ? note.tags.join(', ') : ''}"
+                                   placeholder="z.B. idee, wichtig, später">
+                            <div class="tags-suggestions" id="noteTagsSuggestions"></div>
+                        </div>
+                        <div class="existing-tags">
+                            <span class="tags-label">Häufig verwendet:</span>
+                            ${getPopularNoteTags().map(tag => `
+                                <span class="tag-suggestion" onclick="addNoteTagToInput('${tag}')">${tag}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="note-section">
+                    <div class="section-header">
+                        <h4>📝 Formatierungstipps</h4>
+                    </div>
+                    <div class="formatting-tips">
+                        <div class="tip-row">
+                            <code>**fett**</code> → <strong>fett</strong>
+                        </div>
+                        <div class="tip-row">
+                            <code>*kursiv*</code> → <em>kursiv</em>
+                        </div>
+                        <div class="tip-row">
+                            <code>- Listenpunkt</code> für einfache Listen
+                        </div>
+                        <div class="tip-row">
+                            Zeilenumbrüche werden automatisch erkannt
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions modern">
+                    <button type="button" class="btn btn-secondary modern" onclick="closePopup()">
+                        <span class="icon">↶</span> Abbrechen
                     </button>
-                ` : ''}
-                <button type="submit" class="btn btn-primary">
-                    ${isEdit ? 'Speichern' : 'Erstellen'}
-                </button>
-            </div>
-        </form>
+                    ${isEdit ? `
+                        <button type="button" class="btn btn-warning modern" onclick="convertNoteToTaskFromDialog('${note.id}')">
+                            <span class="icon">✓</span> In Aufgabe umwandeln
+                        </button>
+                        <button type="button" class="btn btn-focus modern" onclick="toggleNotePinFromDialog('${note.id}')">
+                            <span class="icon">${note.pinned ? '📍' : '📌'}</span> ${note.pinned ? 'Lösen' : 'Anheften'}
+                        </button>
+                    ` : ''}
+                    <button type="submit" class="btn btn-primary modern">
+                        <span class="icon">${isEdit ? '💾' : '✨'}</span>
+                        ${isEdit ? 'Speichern' : 'Erstellen'}
+                    </button>
+                </div>
+            </form>
+        </div>
     `;
     
     showPopup(title, content);
     
     // Auto-Resize für Textarea
     const textarea = document.getElementById('noteContent');
-    textarea.addEventListener('input', autoResizeTextarea);
+    if (textarea) {
+        textarea.addEventListener('input', autoResizeTextarea);
+        
+        // Setze initiale Höhe
+        setTimeout(() => {
+            autoResizeTextarea({ target: textarea });
+        }, 100);
+    }
+    
+    // Tags Auto-Complete für Notizen
+    setupNoteTagsAutofill();
     
     // Form Submit Handler
     document.getElementById('noteForm').addEventListener('submit', (e) => {
@@ -245,6 +293,7 @@ function showNoteDialog(note = null) {
         
         if (!formData.content) {
             alert('Bitte geben Sie einen Inhalt ein.');
+            document.getElementById('noteContent').focus();
             return;
         }
         
@@ -255,6 +304,12 @@ function showNoteDialog(note = null) {
         }
         
         closePopup();
+        
+        // Erfolgsmeldung
+        showNotification(
+            isEdit ? '✅ Notiz aktualisiert' : '✨ Neue Notiz erstellt',
+            'success'
+        );
     });
 }
 
@@ -1506,6 +1561,265 @@ function getCurrentTaskId() {
     return null;
 }
 
+// Hilfsfunktionen für modernen Notiz-Dialog
+function getPopularNoteTags() {
+    const allNotes = window.StorageManager?.readDataFile?.('notes') || [];
+    const tagCounts = {};
+    
+    allNotes.forEach(note => {
+        note.tags?.forEach(tag => {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        });
+    });
+    
+    return Object.entries(tagCounts)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([tag,]) => tag);
+}
+
+function addNoteTagToInput(tag) {
+    const tagsInput = document.getElementById('noteTags');
+    if (!tagsInput) return;
+    
+    const currentValue = tagsInput.value.trim();
+    if (currentValue && !currentValue.endsWith(',')) {
+        tagsInput.value = currentValue + ', ' + tag + ', ';
+    } else {
+        tagsInput.value = currentValue + tag + ', ';
+    }
+    tagsInput.focus();
+}
+
+function setupNoteTagsAutofill() {
+    const tagsInput = document.getElementById('noteTags');
+    const suggestionsContainer = document.getElementById('noteTagsSuggestions');
+    
+    if (!tagsInput || !suggestionsContainer) return;
+    
+    tagsInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        const lastCommaIndex = value.lastIndexOf(',');
+        const currentTag = value.substring(lastCommaIndex + 1).trim();
+        
+        if (currentTag.length > 0) {
+            const allNotes = window.StorageManager?.readDataFile?.('notes') || [];
+            const existingTags = [...new Set(allNotes.flatMap(n => n.tags || []))];
+            const matchingTags = existingTags.filter(tag => 
+                tag.toLowerCase().includes(currentTag.toLowerCase()) &&
+                !value.includes(tag)
+            );
+            
+            if (matchingTags.length > 0) {
+                suggestionsContainer.innerHTML = matchingTags
+                    .slice(0, 5)
+                    .map(tag => `<div class="tag-suggestion" onclick="insertNoteTag('${tag}')">${tag}</div>`)
+                    .join('');
+                suggestionsContainer.style.display = 'block';
+            } else {
+                suggestionsContainer.style.display = 'none';
+            }
+        } else {
+            suggestionsContainer.style.display = 'none';
+        }
+    });
+    
+    // Verstecke Vorschläge beim Klick außerhalb
+    document.addEventListener('click', (e) => {
+        if (!tagsInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+            suggestionsContainer.style.display = 'none';
+        }
+    });
+}
+
+function insertNoteTag(tag) {
+    const tagsInput = document.getElementById('noteTags');
+    const suggestionsContainer = document.getElementById('noteTagsSuggestions');
+    
+    if (!tagsInput) return;
+    
+    const value = tagsInput.value;
+    const lastCommaIndex = value.lastIndexOf(',');
+    
+    if (lastCommaIndex === -1) {
+        tagsInput.value = tag + ', ';
+    } else {
+        tagsInput.value = value.substring(0, lastCommaIndex + 1) + ' ' + tag + ', ';
+    }
+    
+    if (suggestionsContainer) {
+        suggestionsContainer.style.display = 'none';
+    }
+    tagsInput.focus();
+}
+
+function toggleNotePinFromDialog(noteId) {
+    if (window.NoteManager && window.NoteManager.togglePinNote) {
+        window.NoteManager.togglePinNote(noteId);
+        
+        // Button-Text aktualisieren
+        const note = window.NoteManager.getNoteById(noteId);
+        if (note) {
+            const button = document.querySelector(`[onclick*="toggleNotePinFromDialog('${noteId}')"]`);
+            if (button) {
+                const icon = note.pinned ? '📍' : '📌';
+                const text = note.pinned ? 'Lösen' : 'Anheften';
+                button.innerHTML = `<span class="icon">${icon}</span> ${text}`;
+            }
+        }
+        
+        showNotification(
+            note.pinned ? '📌 Notiz angeheftet' : '📍 Notiz gelöst',
+            'success'
+        );
+    }
+}
+
+// CSS für moderneren Notiz-Dialog hinzufügen
+const noteDialogCSS = `
+<style>
+/* Modern Note Editor Styles */
+.modern-note-editor {
+    max-width: 100%;
+}
+
+.modern-note-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+}
+
+.note-section {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    border: 1px solid var(--border-color);
+}
+
+.note-section.main-info {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+
+.note-content-large {
+    min-height: 200px;
+    max-height: 400px;
+    resize: vertical;
+    line-height: 1.6;
+    font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+.formatting-tips {
+    display: grid;
+    gap: var(--spacing-sm);
+    background: var(--bg-primary);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.tip-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.tip-row code {
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+}
+
+.tip-row strong, .tip-row em {
+    color: var(--text-primary);
+}
+
+/* Note-specific tag suggestions */
+#noteTagsSuggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+#noteTagsSuggestions .tag-suggestion {
+    padding: 10px 16px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    transition: all var(--transition-fast);
+}
+
+#noteTagsSuggestions .tag-suggestion:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+#noteTagsSuggestions .tag-suggestion:last-child {
+    border-bottom: none;
+}
+
+/* Enhanced popup for notes */
+.popup-container.modern-note-dialog {
+    max-width: 800px;
+    width: 90%;
+}
+
+@media (max-width: 768px) {
+    .modern-note-editor {
+        padding: var(--spacing-md);
+    }
+    
+    .note-section {
+        padding: var(--spacing-md);
+    }
+    
+    .note-content-large {
+        min-height: 150px;
+        max-height: 300px;
+    }
+    
+    .formatting-tips {
+        padding: var(--spacing-sm);
+    }
+    
+    .tip-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+    }
+    
+    .form-actions.modern {
+        flex-direction: column;
+    }
+    
+    .btn.modern {
+        justify-content: center;
+    }
+}
+</style>
+`;
+
+// CSS zum Head hinzufügen
+if (!document.getElementById('note-dialog-styles')) {
+    const styleElement = document.createElement('div');
+    styleElement.id = 'note-dialog-styles';
+    styleElement.innerHTML = noteDialogCSS;
+    document.head.appendChild(styleElement);
+}
+
 // Globale Funktionen für HTML onclick Events
 window.closePopup = closePopup;
 window.toggleSubtaskInDialog = toggleSubtaskInDialog;
@@ -1523,3 +1837,6 @@ window.cancelNoteEdit = cancelNoteEdit;
 window.deleteTaskNoteFromDialog = deleteTaskNoteFromDialog;
 window.editSubtaskText = editSubtaskText;
 window.formatChatTime = formatChatTime;
+window.addNoteTagToInput = addNoteTagToInput;
+window.insertNoteTag = insertNoteTag;
+window.toggleNotePinFromDialog = toggleNotePinFromDialog;
