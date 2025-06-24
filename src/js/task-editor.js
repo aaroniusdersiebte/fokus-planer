@@ -16,22 +16,22 @@ function showTaskEditor(task = null, options = {}) {
     
     // Wenn im Fokus-Modus, zeige den Editor inline
     if (isInFocusMode) {
-        showInlineFocusEditor(task);
+        showInlineFocusEditor(task, options);
         return;
     }
     
     // Sonst zeige als Popup
-    const content = createEditorContent(task, groups, isEdit);
+    const content = createEditorContent(task, groups, isEdit, options.defaultValues);
     window.PopupManager.showPopup(title, content);
     setupEditorEventListeners(task, isEdit);
 }
 
 // Editor-Content erstellen
-function createEditorContent(task, groups, isEdit) {
+function createEditorContent(task, groups, isEdit, defaultValues = {}) {
     return `
         <div class="unified-task-editor">
             <form id="taskEditorForm" class="modern-task-form">
-                <!-- Grundlegende Informationen -->
+                <!-- 1. Grundlegende Informationen (Bearbeiten) -->
                 <div class="task-section main-info">
                     <div class="form-group">
                         <label class="modern-label" for="taskTitle">
@@ -54,28 +54,31 @@ function createEditorContent(task, groups, isEdit) {
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="modern-label" for="taskGroup">
-                                <span class="label-text">📁 Gruppe</span>
-                            </label>
-                            <select id="taskGroup" class="modern-select">
-                                ${groups.map(group => 
-                                    `<option value="${group.id}" ${isEdit && task.groupId === group.id ? 'selected' : ''}>
-                                        ${group.name}
-                                    </option>`
-                                ).join('')}
+                        <label class="modern-label" for="taskGroup">
+                        <span class="label-text">📁 Gruppe</span>
+                        </label>
+                        <select id="taskGroup" class="modern-select">
+                        ${groups.map(group => {
+                        const selectedGroupId = isEdit ? task.groupId : (defaultValues.groupId || groups[0]?.id);
+                        return `<option value="${group.id}" ${selectedGroupId === group.id ? 'selected' : ''}>
+                            ${group.name}
+                            </option>`;
+                            }).join('')}
                             </select>
                         </div>
                         
                         <div class="form-group">
-                            <label class="modern-label" for="taskPriority">
-                                <span class="label-text">⚡ Priorität</span>
-                            </label>
-                            <select id="taskPriority" class="modern-select">
-                                <option value="low" ${isEdit && task.priority === 'low' ? 'selected' : ''}>🟢 Niedrig</option>
-                                <option value="medium" ${isEdit && task.priority === 'medium' ? 'selected' : ''}>🟡 Mittel</option>
-                                <option value="high" ${isEdit && task.priority === 'high' ? 'selected' : ''}>🔴 Hoch</option>
-                            </select>
-                        </div>
+                        <label class="modern-label" for="taskPriority">
+                            <span class="label-text">⚡ Priorität</span>
+                        </label>
+                        <select id="taskPriority" class="modern-select">
+                        ${['low', 'medium', 'high'].map(priority => {
+                            const selectedPriority = isEdit ? task.priority : (defaultValues.priority || 'medium');
+                                const priorityLabels = { low: '🟢 Niedrig', medium: '🟡 Mittel', high: '🔴 Hoch' };
+                                    return `<option value="${priority}" ${selectedPriority === priority ? 'selected' : ''}>${priorityLabels[priority]}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
                     </div>
                     
                     <div class="form-group">
@@ -85,8 +88,8 @@ function createEditorContent(task, groups, isEdit) {
                         </label>
                         <div class="tags-input-container">
                             <input type="text" id="taskTags" class="modern-input" 
-                                   value="${isEdit ? task.tags.join(', ') : ''}"
-                                   placeholder="z.B. wichtig, projekt, deadline">
+                            value="${isEdit ? task.tags.join(', ') : (defaultValues.tags ? defaultValues.tags.join(', ') : '')}"
+                            placeholder="z.B. wichtig, projekt, deadline">
                             <div class="tags-suggestions" id="tagsSuggestions"></div>
                         </div>
                         <div class="existing-tags">
@@ -98,51 +101,7 @@ function createEditorContent(task, groups, isEdit) {
                     </div>
                 </div>
 
-                <!-- Subtasks Sektion -->
-                ${isEdit && task.subtasks && task.subtasks.length > 0 ? `
-                    <div class="task-section">
-                        <div class="section-header">
-                            <h4>📋 Unteraufgaben</h4>
-                            <div class="progress-indicator">
-                                <div class="progress-bar modern">
-                                    <div class="progress-fill" style="width: ${task.progress || 0}%"></div>
-                                </div>
-                                <span class="progress-text">${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
-                            </div>
-                        </div>
-                        
-                        <div class="subtask-input-container">
-                            <input type="text" id="newSubtaskInput" class="modern-input" 
-                                   placeholder="Neue Unteraufgabe hinzufügen...">
-                            <button type="button" class="btn btn-icon modern" onclick="addNewSubtask('${task.id}')">
-                                +
-                            </button>
-                        </div>
-                        
-                        <div class="subtasks-list modern" id="subtasksList">
-                            ${task.subtasks.map(subtask => `
-                                <div class="subtask-item modern ${subtask.completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
-                                    <label class="subtask-checkbox">
-                                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} 
-                                               onchange="toggleSubtaskInEditor('${task.id}', '${subtask.id}')">
-                                        <span class="checkmark"></span>
-                                    </label>
-                                    <span class="subtask-text" ondblclick="editSubtaskText('${subtask.id}')">${subtask.text}</span>
-                                    <div class="subtask-actions">
-                                        <button type="button" class="btn-icon small" onclick="editSubtaskText('${subtask.id}')" title="Bearbeiten">
-                                            ✏️
-                                        </button>
-                                        <button type="button" class="btn-icon small danger" onclick="deleteSubtaskInEditor('${task.id}', '${subtask.id}')" title="Löschen">
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
-                <!-- Chat/History Sektion -->
+                <!-- Chat/History Sektion (2. Position - Notizen) -->
                 ${isEdit && task.notes && task.notes.length > 0 ? `
                     <div class="task-section">
                         <div class="section-header">
@@ -187,6 +146,50 @@ function createEditorContent(task, groups, isEdit) {
                     </div>
                 ` : ''}
 
+                <!-- Subtasks Sektion (3. Position - Unteraufgaben) -->
+                ${isEdit && task.subtasks && task.subtasks.length > 0 ? `
+                    <div class="task-section">
+                        <div class="section-header">
+                            <h4>📋 Unteraufgaben</h4>
+                            <div class="progress-indicator">
+                                <div class="progress-bar modern">
+                                    <div class="progress-fill" style="width: ${task.progress || 0}%"></div>
+                                </div>
+                                <span class="progress-text">${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="subtask-input-container">
+                            <input type="text" id="newSubtaskInput" class="modern-input" 
+                                   placeholder="Neue Unteraufgabe hinzufügen...">
+                            <button type="button" class="btn btn-icon modern" onclick="addNewSubtask('${task.id}')">
+                                +
+                            </button>
+                        </div>
+                        
+                        <div class="subtasks-list modern" id="subtasksList">
+                            ${task.subtasks.map(subtask => `
+                                <div class="subtask-item modern ${subtask.completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
+                                    <label class="subtask-checkbox">
+                                        <input type="checkbox" ${subtask.completed ? 'checked' : ''} 
+                                               onchange="toggleSubtaskInEditor('${task.id}', '${subtask.id}')">
+                                        <span class="checkmark"></span>
+                                    </label>
+                                    <span class="subtask-text" ondblclick="editSubtaskText('${subtask.id}')">${subtask.text}</span>
+                                    <div class="subtask-actions">
+                                        <button type="button" class="btn-icon small" onclick="editSubtaskText('${subtask.id}')" title="Bearbeiten">
+                                            ✏️
+                                        </button>
+                                        <button type="button" class="btn-icon small danger" onclick="deleteSubtaskInEditor('${task.id}', '${subtask.id}')" title="Löschen">
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
                 <!-- Form Actions -->
                 <div class="form-actions modern">
                     <button type="button" class="btn btn-secondary modern" onclick="closeTaskEditor()">
@@ -210,14 +213,14 @@ function createEditorContent(task, groups, isEdit) {
 }
 
 // Inline Fokus-Editor anzeigen
-function showInlineFocusEditor(task) {
+function showInlineFocusEditor(task, options = {}) {
     const editorContainer = document.getElementById('focusTaskEditor');
     if (!editorContainer) return;
     
     const groups = window.GroupManager.getAllGroups();
     const isEdit = !!task;
     
-    editorContainer.innerHTML = createEditorContent(task, groups, isEdit);
+    editorContainer.innerHTML = createEditorContent(task, groups, isEdit, options.defaultValues);
     editorContainer.classList.add('active');
     setupEditorEventListeners(task, isEdit);
 }

@@ -503,7 +503,7 @@ function calculateGroupProgress(tasks) {
     return { progressPercent, completedTasks };
 }
 
-// Listen-Ansicht aktualisieren (nach Gruppen)
+// Listen-Ansicht aktualisieren (mit Filtern)
 function updateListView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
@@ -514,7 +514,16 @@ function updateListView() {
     
     let filteredTasks = filterTasks(searchTerm, filters.group, filters.priority);
     
-    // Nach Gruppen organisieren
+    // Entscheide ob nach Gruppen oder Prioritäten sortiert wird
+    if (filters.sortMode === 'groups') {
+        updateListViewByGroups(container, filteredTasks);
+    } else {
+        updateListViewByPriority(container, filteredTasks);
+    }
+}
+
+// Listen-Ansicht nach Gruppen
+function updateListViewByGroups(container, filteredTasks) {
     const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
     const tasksByGroup = {};
     
@@ -561,7 +570,7 @@ function updateListView() {
                         </div>
                     </div>
                 `).join('')}
-            ${Object.values(tasksByGroup).every(groupData => groupData.tasks.length === 0) ? `
+            ${filteredTasks.length === 0 ? `
                 <div class="empty-state">
                     <div class="empty-icon">📋</div>
                     <h3>Keine Aufgaben gefunden</h3>
@@ -575,7 +584,61 @@ function updateListView() {
     `;
 }
 
-// Grid/Raster-Ansicht (nach Gruppen sortiert)
+// Listen-Ansicht nach Prioritäten
+function updateListViewByPriority(container, filteredTasks) {
+    const priorities = {
+        high: { name: 'Hohe Priorität', icon: '🔴', color: '#f44336', tasks: [] },
+        medium: { name: 'Mittlere Priorität', icon: '🟡', color: '#ff9800', tasks: [] },
+        low: { name: 'Niedrige Priorität', icon: '🟢', color: '#4caf50', tasks: [] }
+    };
+    
+    filteredTasks.forEach(task => {
+        priorities[task.priority].tasks.push(task);
+    });
+    
+    container.innerHTML = `
+        <div class="list-view-container">
+            ${Object.entries(priorities)
+                .filter(([priority, data]) => data.tasks.length > 0)
+                .map(([priority, data]) => `
+                    <div class="list-group priority-group">
+                        <div class="list-group-header">
+                            <div class="list-group-title">
+                                <span class="group-color-dot" style="background: ${data.color}">${data.icon}</span>
+                                <span class="group-name">${data.name}</span>
+                                <span class="list-group-count">${data.tasks.length}</span>
+                            </div>
+                            <div class="list-group-stats">
+                                <span class="stat-item">
+                                    <span class="stat-icon">✓</span>
+                                    <span>${data.tasks.filter(t => t.completed).length} erledigt</span>
+                                </span>
+                                <span class="stat-item">
+                                    <span class="stat-icon">📋</span>
+                                    <span>${data.tasks.filter(t => t.subtasks && t.subtasks.length > 0).length} mit Subtasks</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="list-group-content">
+                            ${data.tasks.map(task => createListItem(task)).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            ${Object.values(priorities).every(data => data.tasks.length === 0) ? `
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <h3>Keine Aufgaben gefunden</h3>
+                    <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
+                    <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
+                        <span class="icon">+</span> Neue Aufgabe
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Grid/Raster-Ansicht (mit Filtern)
 function updateGridView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
@@ -586,6 +649,16 @@ function updateGridView() {
     
     let filteredTasks = filterTasks(searchTerm, filters.group, filters.priority);
     
+    // Entscheide Sortierung basierend auf sortMode
+    if (filters.sortMode === 'groups') {
+        updateGridViewByGroups(container, filteredTasks);
+    } else {
+        updateGridViewByPriority(container, filteredTasks);
+    }
+}
+
+// Grid-Ansicht nach Gruppen sortiert
+function updateGridViewByGroups(container, filteredTasks) {
     // Nach Gruppen sortieren, dann nach Priorität
     filteredTasks.sort((a, b) => {
         // Erst nach Gruppe sortieren
@@ -600,6 +673,30 @@ function updateGridView() {
         return priorityOrder[b.priority] - priorityOrder[a.priority];
     });
     
+    renderGridTasks(container, filteredTasks, 'Nach Gruppen gruppiert');
+}
+
+// Grid-Ansicht nach Prioritäten sortiert
+function updateGridViewByPriority(container, filteredTasks) {
+    // Nach Priorität sortieren, dann nach Gruppen
+    filteredTasks.sort((a, b) => {
+        // Erst nach Priorität sortieren
+        const priorityOrder = { high: 3, medium: 2, low: 1 };
+        const priorityComparison = priorityOrder[b.priority] - priorityOrder[a.priority];
+        
+        if (priorityComparison !== 0) return priorityComparison;
+        
+        // Dann nach Gruppe sortieren
+        const groupA = window.GroupManager.getGroupById(a.groupId);
+        const groupB = window.GroupManager.getGroupById(b.groupId);
+        return (groupA?.name || '').localeCompare(groupB?.name || '');
+    });
+    
+    renderGridTasks(container, filteredTasks, 'Nach Priorität gruppiert');
+}
+
+// Grid-Tasks rendern (Hilfsfunktion)
+function renderGridTasks(container, filteredTasks, sortInfo) {
     container.innerHTML = '';
     
     if (filteredTasks.length === 0) {
@@ -620,11 +717,17 @@ function updateGridView() {
     const gridContainer = document.createElement('div');
     gridContainer.className = 'tasks-grid';
     
+    // Sortierungsinfo hinzufügen
+    const sortInfoEl = document.createElement('div');
+    sortInfoEl.className = 'grid-sort-info';
+    sortInfoEl.innerHTML = `<span class="sort-info-text">${sortInfo} • ${filteredTasks.length} Aufgaben</span>`;
+    
     filteredTasks.forEach(task => {
         const taskCard = createTaskCard(task);
         gridContainer.appendChild(taskCard);
     });
     
+    container.appendChild(sortInfoEl);
     container.appendChild(gridContainer);
 }
 
@@ -890,6 +993,11 @@ window.TaskManager = {
     updateKanbanView,
     updateListView,
     updateGridView,
+    updateListViewByGroups,
+    updateListViewByPriority,
+    updateGridViewByGroups,
+    updateGridViewByPriority,
+    renderGridTasks,
     openTaskEditor,
     showNewTaskDialog,
     showTaskEditDialog,

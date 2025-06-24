@@ -119,12 +119,12 @@
         .task-panel {
             flex: 1;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: var(--spacing-lg);
             overflow: hidden;
         }
         
-        .task-info, .task-notes {
+        .task-editor-panel, .task-notes, .task-subtasks {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
@@ -318,6 +318,79 @@
             margin-top: var(--spacing-xs);
         }
         
+        .edit-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+        
+        .edit-actions .btn {
+            flex: 1;
+            min-width: 120px;
+        }
+        
+        .subtasks-container, .notes-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .subtask-input-container {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+        }
+        
+        .subtask-input {
+            flex: 1;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        
+        .subtask-input:focus {
+            outline: none;
+            border-color: var(--accent-focus);
+            box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+        }
+        
+        .add-subtask-btn {
+            background: var(--accent-focus);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: white;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            min-width: 80px;
+        }
+        
+        .add-subtask-btn:hover {
+            background: #e55a2e;
+            transform: translateY(-1px);
+        }
+        
+        .add-subtask-btn:disabled {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        @media (max-width: 1200px) {
+            .task-panel {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .task-subtasks {
+                grid-column: 1 / -1;
+            }
+        }
+        
         @media (max-width: 768px) {
             .task-panel {
                 grid-template-columns: 1fr;
@@ -330,6 +403,14 @@
             .timer-progress {
                 width: 150px;
                 height: 150px;
+            }
+            
+            .edit-actions {
+                flex-direction: column;
+            }
+            
+            .edit-actions .btn {
+                min-width: auto;
             }
         }
     </style>
@@ -390,10 +471,10 @@
 
         <!-- Task Panel -->
         <div class="task-panel">
-            <!-- Task Info -->
-            <div class="task-info">
+            <!-- 1. Task Editor (Bearbeiten) -->
+            <div class="task-editor-panel">
                 <div class="panel-title">
-                    <span class="icon">📋</span> Aktuelle Aufgabe
+                    <span class="icon">✏️</span> Aufgabe bearbeiten
                 </div>
                 <div class="task-content">
                     <div class="task-title" id="taskTitle">Aufgabe laden...</div>
@@ -403,13 +484,18 @@
                         <!-- Wird dynamisch gefüllt -->
                     </div>
                     
-                    <div class="subtasks-list" id="subtasksList">
-                        <!-- Wird dynamisch gefüllt -->
+                    <div class="edit-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="openTaskEditor()" title="Vollständig bearbeiten">
+                            <span class="icon">🖊️</span> Erweitert bearbeiten
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="markTaskComplete()" title="Als erledigt markieren">
+                            <span class="icon">✅</span> Erledigt
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Notes -->
+            <!-- 2. Notes (Notizen) -->
             <div class="task-notes">
                 <div class="panel-title">
                     <span class="icon">📝</span> Session Notizen
@@ -424,6 +510,26 @@
                                   placeholder="Notiz hinzufügen... (Enter zum Speichern)"
                                   rows="2"></textarea>
                         <button class="add-note-btn" id="addNoteBtn" onclick="addNote()">
+                            Hinzufügen
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 3. Subtasks (Unteraufgaben) -->
+            <div class="task-subtasks">
+                <div class="panel-title">
+                    <span class="icon">📋</span> Unteraufgaben
+                </div>
+                <div class="subtasks-container">
+                    <div class="subtasks-list" id="subtasksList">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                    
+                    <div class="subtask-input-container">
+                        <input type="text" class="subtask-input" id="subtaskInput" 
+                               placeholder="Neue Unteraufgabe hinzufügen...">
+                        <button class="add-subtask-btn" id="addSubtaskBtn" onclick="addSubtask()">
                             Hinzufügen
                         </button>
                     </div>
@@ -477,6 +583,9 @@
                 e.target.style.height = 'auto';
                 e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
             });
+            
+            // Subtask-Input Setup
+            setupSubtaskInput();
 
             // Fenster schließen Handler
             window.addEventListener('beforeunload', () => {
@@ -645,9 +754,58 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        function openTaskEditor() {
+            if (window.opener && window.opener.TaskEditorManager && currentTask) {
+                window.opener.TaskEditorManager.showTaskEditor(currentTask);
+            }
+        }
+        
+        function markTaskComplete() {
+            if (confirm('Möchten Sie diese Aufgabe als erledigt markieren?')) {
+                if (window.opener && window.opener.TaskManager && currentTask) {
+                    window.opener.TaskManager.completeTask(currentTask.id);
+                    stopFocus();
+                }
+            }
+        }
+        
+        function addSubtask() {
+            const subtaskInput = document.getElementById('subtaskInput');
+            const subtaskText = subtaskInput.value.trim();
+            
+            if (!subtaskText || !currentTask) return;
+            
+            if (window.opener && window.opener.TaskManager) {
+                const newSubtask = window.opener.TaskManager.addSubtask(currentTask.id, subtaskText);
+                if (newSubtask) {
+                    // Task-Daten aktualisieren
+                    currentTask = window.opener.TaskManager.getTaskById(currentTask.id);
+                    updateSubtasksList();
+                    subtaskInput.value = '';
+                    subtaskInput.focus();
+                }
+            }
+        }
+        
+        // Enter-Handler für Subtask-Input
+        function setupSubtaskInput() {
+            const subtaskInput = document.getElementById('subtaskInput');
+            if (subtaskInput) {
+                subtaskInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSubtask();
+                    }
+                });
+            }
+        }
+
         // Globale Funktionen für Event-Handler
         window.toggleSubtask = toggleSubtask;
         window.addNote = addNote;
+        window.addSubtask = addSubtask;
+        window.openTaskEditor = openTaskEditor;
+        window.markTaskComplete = markTaskComplete;
         window.toggleTimer = toggleTimer;
         window.stopFocus = stopFocus;
         window.exitFocus = exitFocus;

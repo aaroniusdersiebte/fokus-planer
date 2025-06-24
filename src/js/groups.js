@@ -100,6 +100,7 @@ function updateGroupTaskCounts() {
 function updateGroupsUI() {
     updateGroupFilter();
     updateTasksGroupedView();
+    updateGroupsOverview();
 }
 
 // Gruppen-Filter aktualisieren
@@ -224,6 +225,203 @@ function editGroup(groupId) {
     });
 }
 
+// Gruppen-Übersicht aktualisieren
+function updateGroupsOverview() {
+    const container = document.getElementById('groupsOverview');
+    if (!container) return;
+    
+    // Alle Gruppen anzeigen, auch ohne Aufgaben
+    updateGroupTaskCounts();
+    
+    const allGroups = groups.slice(); // Kopie erstellen
+    
+    // Nach Anzahl der Aufgaben sortieren (absteigens), dann alphabetisch
+    allGroups.sort((a, b) => {
+        if ((b.taskCount || 0) !== (a.taskCount || 0)) {
+            return (b.taskCount || 0) - (a.taskCount || 0);
+        }
+        return a.name.localeCompare(b.name);
+    });
+    
+    container.innerHTML = `
+        <div class="groups-overview-container">
+            <div class="groups-header">
+                <div class="groups-title">
+                    <h3>📁 Gruppen-Übersicht</h3>
+                    <span class="groups-count">${groups.length} Gruppen</span>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="showNewGroupDialog()">
+                    <span class="icon">+</span> Neue Gruppe
+                </button>
+            </div>
+            
+            <div class="groups-grid">
+                ${allGroups.map(group => {
+                    const activeTasks = group.taskCount || 0;
+                    const progressStats = getGroupProgressStats(group.id);
+                    
+                    return `
+                        <div class="group-card ${group.id === 'default' ? 'default-group' : ''}" data-group-id="${group.id}">
+                            <div class="group-card-header">
+                                <div class="group-color-indicator" style="background: ${group.color}"></div>
+                                <div class="group-card-actions">
+                                    <button class="btn-icon-micro" onclick="editGroup('${group.id}')" title="Bearbeiten">
+                                        ✏️
+                                    </button>
+                                    ${group.id !== 'default' ? `
+                                        <button class="btn-icon-micro danger" onclick="deleteGroup('${group.id}')" title="Löschen">
+                                            🗑️
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="group-card-content">
+                                <h4 class="group-card-name">${group.name}</h4>
+                                
+                                <div class="group-stats">
+                                    <div class="stat-item">
+                                        <span class="stat-icon">📋</span>
+                                        <span class="stat-value">${activeTasks}</span>
+                                        <span class="stat-label">Aufgaben</span>
+                                    </div>
+                                    
+                                    <div class="stat-item">
+                                        <span class="stat-icon">✓</span>
+                                        <span class="stat-value">${progressStats.completed}</span>
+                                        <span class="stat-label">Erledigt</span>
+                                    </div>
+                                    
+                                    <div class="stat-item">
+                                        <span class="stat-icon">⚡</span>
+                                        <span class="stat-value">${progressStats.highPriority}</span>
+                                        <span class="stat-label">Wichtig</span>
+                                    </div>
+                                </div>
+                                
+                                ${activeTasks > 0 ? `
+                                    <div class="group-progress">
+                                        <div class="progress-bar-mini">
+                                            <div class="progress-fill-mini" 
+                                                 style="width: ${progressStats.progressPercent}%; background: ${group.color}"></div>
+                                        </div>
+                                        <span class="progress-text-mini">${progressStats.progressPercent}%</span>
+                                    </div>
+                                    
+                                    <div class="group-actions">
+                                        <button class="btn btn-sm btn-secondary" onclick="filterByGroup('${group.id}')" title="Aufgaben dieser Gruppe anzeigen">
+                                            <span class="icon">🔍</span> Anzeigen
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" onclick="createTaskInGroup('${group.id}')" title="Neue Aufgabe in dieser Gruppe">
+                                            <span class="icon">+</span> Aufgabe
+                                        </button>
+                                    </div>
+                                ` : `
+                                    <div class="empty-group-state">
+                                        <p class="empty-group-text">Keine Aufgaben</p>
+                                        <button class="btn btn-sm btn-primary" onclick="createTaskInGroup('${group.id}')">
+                                            <span class="icon">+</span> Erste Aufgabe
+                                        </button>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            
+            ${groups.length === 1 ? `
+                <div class="groups-hint">
+                    <p>💡 <strong>Tipp:</strong> Erstellen Sie weitere Gruppen, um Ihre Aufgaben besser zu organisieren!</p>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Gruppen-Progress-Statistiken abrufen
+function getGroupProgressStats(groupId) {
+    if (!window.StorageManager) {
+        return { completed: 0, total: 0, progressPercent: 0, highPriority: 0 };
+    }
+    
+    try {
+        const tasks = window.StorageManager.readDataFile('tasks');
+        const groupTasks = tasks.filter(task => 
+            task.groupId === groupId && !task.completed
+        );
+        
+        const completedTasks = tasks.filter(task => 
+            task.groupId === groupId && task.completed
+        ).length;
+        
+        const highPriorityTasks = groupTasks.filter(task => 
+            task.priority === 'high'
+        ).length;
+        
+        const tasksWithProgress = groupTasks.filter(task => 
+            task.progress && task.progress > 0
+        ).length;
+        
+        const progressPercent = groupTasks.length > 0 
+            ? Math.round((tasksWithProgress / groupTasks.length) * 100)
+            : 0;
+        
+        return {
+            completed: completedTasks,
+            total: groupTasks.length,
+            progressPercent,
+            highPriority: highPriorityTasks
+        };
+    } catch (error) {
+        console.error('Fehler beim Abrufen der Gruppen-Statistiken:', error);
+        return { completed: 0, total: 0, progressPercent: 0, highPriority: 0 };
+    }
+}
+
+// Nach Gruppe filtern
+function filterByGroup(groupId) {
+    // UI-Manager verwenden, um Filter zu setzen
+    if (window.UIManager) {
+        window.UIManager.setFilters(groupId, '');
+        
+        // Zu Tasks-Tab wechseln
+        window.UIManager.switchTab('tasks');
+        
+        // Tasks UI aktualisieren
+        if (window.TaskManager) {
+            window.TaskManager.updateTasksUI();
+        }
+    }
+}
+
+// Aufgabe in Gruppe erstellen
+function createTaskInGroup(groupId) {
+    if (window.TaskEditorManager) {
+        // Erstelle eine neue Aufgabe mit vorgewählter Gruppe
+        const defaultTask = {
+            groupId: groupId,
+            priority: 'medium',
+            tags: []
+        };
+        
+        window.TaskEditorManager.showTaskEditor(null, {
+            callbacks: {
+                onSave: (savedTask) => {
+                    // Gruppen-UI aktualisieren nach dem Speichern
+                    setTimeout(() => {
+                        updateGroupsUI();
+                        if (window.TaskManager) {
+                            window.TaskManager.updateTasksUI();
+                        }
+                    }, 100);
+                }
+            },
+            defaultValues: defaultTask
+        });
+    }
+}
+
 // Neue Gruppe Dialog
 function showNewGroupDialog() {
     const content = `
@@ -304,6 +502,14 @@ window.GroupManager = {
     getAllGroups,
     updateGroupTaskCounts,
     updateGroupsUI,
+    updateGroupsOverview,
+    getGroupProgressStats,
+    filterByGroup,
+    createTaskInGroup,
     editGroup,
     showNewGroupDialog
 };
+
+// Globale Funktionen für HTML onclick Events
+window.filterByGroup = filterByGroup;
+window.createTaskInGroup = createTaskInGroup;
