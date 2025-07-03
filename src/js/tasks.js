@@ -421,6 +421,11 @@ function updateKanbanByGroups(container, filteredTasks) {
                                     <span class="kanban-text">${groupData.group.name}</span>
                                     <span class="kanban-count">${groupData.tasks.length}</span>
                                 </div>
+                                <div class="kanban-actions">
+                                    <button class="btn-kanban-add" onclick="window.TaskManager.showNewTaskDialogForGroup('${groupData.group.id}')" title="Aufgabe zu ${groupData.group.name} hinzufügen">
+                                        <span class="icon">+</span>
+                                    </button>
+                                </div>
                                 <div class="kanban-progress">
                                     <div class="progress-mini" style="background: ${groupData.group.color}20">
                                         <div class="progress-fill-mini" style="width: ${progressStats.progressPercent}%; background: ${groupData.group.color}"></div>
@@ -473,6 +478,11 @@ function updateKanbanByPriority(container, filteredTasks) {
                             <span class="kanban-icon">${data.icon}</span>
                             <span class="kanban-text">${data.name}</span>
                             <span class="kanban-count">${data.tasks.length}</span>
+                        </div>
+                        <div class="kanban-actions">
+                            <button class="btn-kanban-add" onclick="window.TaskManager.showNewTaskDialogForPriority('${priority}')" title="Aufgabe mit ${data.name} hinzufügen">
+                                <span class="icon">+</span>
+                            </button>
                         </div>
                         <div class="kanban-progress">
                             <div class="progress-mini" style="background: ${data.color}20">
@@ -962,6 +972,22 @@ function showNewTaskDialog() {
     window.TaskEditorManager.showTaskEditor();
 }
 
+// Neue Aufgabe Dialog für spezifische Gruppe
+function showNewTaskDialogForGroup(groupId) {
+    const defaultValues = {
+        groupId: groupId
+    };
+    window.TaskEditorManager.showTaskEditor(null, { defaultValues });
+}
+
+// Neue Aufgabe Dialog für spezifische Priorität
+function showNewTaskDialogForPriority(priority) {
+    const defaultValues = {
+        priority: priority
+    };
+    window.TaskEditorManager.showTaskEditor(null, { defaultValues });
+}
+
 // Aufgabe bearbeiten Dialog
 function showTaskEditDialog(task) {
     window.TaskEditorManager.showTaskEditor(task);
@@ -1000,6 +1026,8 @@ window.TaskManager = {
     renderGridTasks,
     openTaskEditor,
     showNewTaskDialog,
+    showNewTaskDialogForGroup,
+    showNewTaskDialogForPriority,
     showTaskEditDialog,
     syncViewMode,
     get currentViewMode() { return currentViewMode; },

@@ -407,12 +407,17 @@ function createNotesTabContent(task) {
             </div>
             
             <div class="add-note-focus">
-                <textarea id="newNoteFocusInput" class="focus-textarea" 
-                          placeholder="Notiz, Idee oder Fortschritt hinzufügen..." rows="3"></textarea>
-                <button class="btn-focus-add" onclick="addNoteInFocusMode('${task.id}')">
-                    <span class="icon">💬</span> Hinzufügen
-                </button>
-            </div>
+            <textarea id="newNoteFocusInput" class="focus-textarea" 
+            placeholder="Notiz, Idee oder Fortschritt hinzufügen..." rows="3"></textarea>
+            <div class="note-add-actions">
+            <button class="btn-focus-add" onclick="addNoteInFocusMode('${task.id}')">
+                    <span class="icon">💬</span> Zur Aufgabe
+                    </button>
+                                    <button class="btn-focus-add secondary" onclick="addGeneralNoteInFocusMode()">
+                                        <span class="icon">📝</span> Allgemeine Notiz
+                                    </button>
+                                </div>
+                            </div>
         </div>
     `;
 }
@@ -577,6 +582,43 @@ function addNoteInFocusMode(taskId) {
         
         input.value = '';
         input.focus();
+        
+        // Erfolgsmeldung
+        showFocusNotification('✅ Notiz zur Aufgabe hinzugefügt', 'success');
+    }
+}
+
+// Allgemeine Notiz im Fokus-Modus hinzufügen
+function addGeneralNoteInFocusMode() {
+    const input = document.getElementById('newNoteFocusInput');
+    if (!input || !input.value.trim()) return;
+    
+    const noteText = input.value.trim();
+    
+    // Erstelle allgemeine Notiz über NoteManager
+    if (window.NoteManager && window.NoteManager.createNote) {
+        const noteData = {
+            title: noteText.length > 50 ? noteText.substring(0, 47) + '...' : noteText,
+            content: noteText,
+            tags: ['fokus-session'],
+            important: false
+        };
+        
+        const newNote = window.NoteManager.createNote(noteData);
+        
+        if (newNote) {
+            // Auch zur Fokus-Session hinzufügen
+            addFocusNote(`[Allgemeine Notiz] ${noteText}`);
+            
+            input.value = '';
+            input.focus();
+            
+            // Erfolgsmeldung mit Link zum Notizen-Tab
+            showFocusNotification('📝 Allgemeine Notiz erstellt! Gespeichert im Notizen-Tab.', 'success');
+        }
+    } else {
+        console.error('NoteManager nicht verfügbar');
+        showFocusNotification('⚠️ Fehler beim Erstellen der Notiz', 'warning');
     }
 }
 
@@ -926,6 +968,7 @@ window.startBreak = startBreak;
 window.switchFocusTab = switchFocusTab;
 window.addSubtaskInFocusMode = addSubtaskInFocusMode;
 window.addNoteInFocusMode = addNoteInFocusMode;
+window.addGeneralNoteInFocusMode = addGeneralNoteInFocusMode;
 window.toggleSubtaskInFocus = toggleSubtaskInFocus;
 window.minimizeFocusMode = minimizeFocusMode;
 window.exitFocusMode = exitFocusMode;
