@@ -78,9 +78,27 @@ function getGroupById(groupId) {
     return groups.find(g => g.id === groupId);
 }
 
-// Alle Gruppen abrufen
+// Alle Gruppen abrufen (sortiert)
 function getAllGroups() {
-    return groups;
+    // Nach order-Eigenschaft sortieren, falls vorhanden
+    const sortedGroups = [...groups].sort((a, b) => {
+        // Default-Gruppe immer zuerst
+        if (a.id === 'default' && b.id !== 'default') return -1;
+        if (b.id === 'default' && a.id !== 'default') return 1;
+        
+        // Nach order-Eigenschaft sortieren
+        const orderA = a.order !== undefined ? a.order : 999;
+        const orderB = b.order !== undefined ? b.order : 999;
+        
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+        
+        // Falls keine order vorhanden, alphabetisch sortieren
+        return a.name.localeCompare(b.name);
+    });
+    
+    return sortedGroups;
 }
 
 // Anzahl der Aufgaben pro Gruppe aktualisieren

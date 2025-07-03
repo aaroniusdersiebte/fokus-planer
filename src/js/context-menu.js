@@ -23,21 +23,31 @@ function handleGlobalContextMenu(e) {
     e.preventDefault();
     closeAllContextMenus();
     
+    // Erste Priorität: Direkte Aufgaben-Elemente
     const taskElement = e.target.closest('[data-task-id]');
-    const groupElement = e.target.closest('[data-group-id]');
-    const groupHeader = e.target.closest('.group-header, .kanban-header, .list-group-header');
-    
-    if (taskElement && !groupElement) {
-        // Aufgaben-Kontextmenü
+    if (taskElement) {
         const taskId = taskElement.dataset.taskId;
         showTaskContextMenu(e.clientX, e.clientY, taskId);
-    } else if (groupHeader || groupElement) {
-        // Gruppen-Kontextmenü
-        const groupId = groupElement?.dataset?.groupId || 
-                       groupHeader?.querySelector('[data-group-id]')?.dataset?.groupId ||
-                       extractGroupIdFromHeader(groupHeader);
+        return;
+    }
+    
+    // Zweite Priorität: Gruppen-Header (nur wenn nicht in einer Aufgabe)
+    const groupHeader = e.target.closest('.group-header, .kanban-header, .list-group-header, .grid-group-header');
+    if (groupHeader) {
+        const groupId = extractGroupIdFromHeader(groupHeader);
         if (groupId) {
             showGroupContextMenu(e.clientX, e.clientY, groupId);
+            return;
+        }
+    }
+    
+    // Dritte Priorität: Gruppen-Container (falls Header-Detection fehlschlägt)
+    const groupElement = e.target.closest('[data-group-id]');
+    if (groupElement) {
+        const groupId = groupElement.dataset.groupId;
+        if (groupId) {
+            showGroupContextMenu(e.clientX, e.clientY, groupId);
+            return;
         }
     }
 }
@@ -125,6 +135,11 @@ function showGroupContextMenu(x, y, groupId) {
             icon: '+',
             label: 'Aufgabe hinzufügen',
             action: () => window.TaskManager.showNewTaskDialogForGroup(groupId)
+        },
+        {
+            icon: '🗓️',
+            label: 'Alle Gruppen sortieren',
+            action: () => showGroupSortDialog()
         },
         { divider: true },
         {
@@ -317,6 +332,187 @@ function selectGroupColor(groupId, color) {
     }
 }
 
+// Gruppen-Sort-Dialog anzeigen
+function showGroupSortDialog() {
+    const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
+    
+    const content = `
+        <div class="group-sort-dialog">
+            <h4>🗓️ Gruppen sortieren</h4>
+            <p>Ziehen Sie die Gruppen per Drag & Drop in die gewünschte Reihenfolge:</p>
+            
+            <div class="sortable-groups" id="sortableGroups">
+                ${groups.map((group, index) => `
+                    <div class="sortable-group-item" data-group-id="${group.id}" draggable="true">
+                        <div class="drag-handle">:::</div>
+                        <div class="group-color-dot" style="background: ${group.color}"></div>
+                        <span class="group-name">${group.name}</span>
+                        <span class="group-position">#${index + 1}</span>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div class="sort-actions">
+                <button class="btn btn-secondary" onclick="resetGroupOrder()">Zurücksetzen</button>
+                <button class="btn btn-primary" onclick="saveGroupOrder()">Reihenfolge speichern</button>
+            </div>
+        </div>
+    `;
+    
+    window.PopupManager.showPopup('Gruppen sortieren', content);
+    
+    // Drag & Drop initialisieren
+    setTimeout(() => {
+        initializeGroupSorting();
+    }, 100);
+}
+
+// Drag & Drop für Gruppen-Sortierung initialisieren
+function initializeGroupSorting() {
+    const container = document.getElementById('sortableGroups');
+    if (!container) return;
+    
+    let draggedItem = null;
+    let draggedOverItem = null;
+    
+    // Event-Listener für alle Gruppen-Items
+    container.querySelectorAll('.sortable-group-item').forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedItem = item;
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        item.addEventListener('dragend', () => {
+            if (draggedItem) {
+                draggedItem.classList.remove('dragging');
+                draggedItem = null;
+            }
+            container.querySelectorAll('.sortable-group-item').forEach(i => {
+                i.classList.remove('drag-over');
+            });
+        });
+        
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            if (item !== draggedItem) {
+                draggedOverItem = item;
+                item.classList.add('drag-over');
+            }
+        });
+        
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+        
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            
+            if (draggedItem && draggedOverItem && draggedItem !== draggedOverItem) {
+                // Bestimme ob vor oder nach dem Element eingefügt werden soll
+                const rect = draggedOverItem.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                const insertAfter = e.clientY > midpoint;
+                
+                if (insertAfter) {
+                    draggedOverItem.parentNode.insertBefore(draggedItem, draggedOverItem.nextSibling);
+                } else {
+                    draggedOverItem.parentNode.insertBefore(draggedItem, draggedOverItem);
+                }
+                
+                // Positionen aktualisieren
+                updateGroupPositions();
+            }
+            
+            container.querySelectorAll('.sortable-group-item').forEach(i => {
+                i.classList.remove('drag-over');
+            });
+        });
+    });
+}
+
+// Gruppen-Positionen aktualisieren
+function updateGroupPositions() {
+    const container = document.getElementById('sortableGroups');
+    if (!container) return;
+    
+    container.querySelectorAll('.sortable-group-item').forEach((item, index) => {
+        const positionSpan = item.querySelector('.group-position');
+        if (positionSpan) {
+            positionSpan.textContent = `#${index + 1}`;
+        }
+    });
+}
+
+// Gruppen-Reihenfolge zurücksetzen
+function resetGroupOrder() {
+    const container = document.getElementById('sortableGroups');
+    if (!container) return;
+    
+    // Gruppen nach Name sortieren (Default-Reihenfolge)
+    const items = Array.from(container.querySelectorAll('.sortable-group-item'));
+    items.sort((a, b) => {
+        const nameA = a.querySelector('.group-name').textContent;
+        const nameB = b.querySelector('.group-name').textContent;
+        
+        // Default-Gruppe immer an erster Stelle
+        if (a.dataset.groupId === 'default') return -1;
+        if (b.dataset.groupId === 'default') return 1;
+        
+        return nameA.localeCompare(nameB);
+    });
+    
+    // Container leeren und sortierte Items einfügen
+    container.innerHTML = '';
+    items.forEach(item => container.appendChild(item));
+    
+    updateGroupPositions();
+}
+
+// Gruppen-Reihenfolge speichern
+function saveGroupOrder() {
+    const container = document.getElementById('sortableGroups');
+    if (!container) return;
+    
+    const newOrder = [];
+    container.querySelectorAll('.sortable-group-item').forEach((item, index) => {
+        newOrder.push({
+            id: item.dataset.groupId,
+            order: index
+        });
+    });
+    
+    // Reihenfolge in den Gruppen speichern
+    if (window.GroupManager) {
+        const groups = window.GroupManager.getAllGroups();
+        
+        // Order-Eigenschaft zu jeder Gruppe hinzufügen
+        newOrder.forEach(orderItem => {
+            const group = groups.find(g => g.id === orderItem.id);
+            if (group) {
+                group.order = orderItem.order;
+            }
+        });
+        
+        // Gruppen speichern
+        window.GroupManager.saveGroups();
+        
+        // UI in allen Ansichten aktualisieren
+        if (window.TaskManager) {
+            window.TaskManager.updateTasksUI();
+        }
+        if (window.GroupManager.updateGroupsUI) {
+            window.GroupManager.updateGroupsUI();
+        }
+        
+        console.log('🗓️ Gruppen-Reihenfolge gespeichert:', newOrder);
+    }
+    
+    window.PopupManager.closePopup();
+}
+
 // Prüfen ob Gruppe eingeklappt ist
 function isGroupCollapsed(groupId) {
     return collapsedGroups.has(groupId);
@@ -345,5 +541,7 @@ window.ContextMenuManager = {
 // Globale Funktionen für HTML onclick Events
 window.selectGroupColor = selectGroupColor;
 window.duplicateTask = duplicateTask;
+window.resetGroupOrder = resetGroupOrder;
+window.saveGroupOrder = saveGroupOrder;
 
 console.log('🎯 Kontextmenü-System geladen');

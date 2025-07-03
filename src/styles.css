@@ -2740,6 +2740,214 @@ body {
     }
 }
 
+/* Group Sort Dialog */
+.group-sort-dialog {
+    max-width: 500px;
+    text-align: center;
+}
+
+.group-sort-dialog h4 {
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+}
+
+.group-sort-dialog p {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-lg);
+    font-size: 0.9rem;
+}
+
+.sortable-groups {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.sortable-group-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    cursor: move;
+    transition: all var(--transition-fast);
+    user-select: none;
+}
+
+.sortable-group-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    transform: translateX(4px);
+}
+
+.sortable-group-item.dragging {
+    opacity: 0.5;
+    transform: rotate(3deg);
+    box-shadow: var(--shadow-heavy);
+}
+
+.sortable-group-item.drag-over {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: white;
+    transform: scale(1.02);
+}
+
+.drag-handle {
+    color: var(--text-muted);
+    font-family: monospace;
+    font-weight: bold;
+    cursor: move;
+    user-select: none;
+    padding: var(--spacing-xs);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+}
+
+.sortable-group-item:hover .drag-handle {
+    color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: white;
+}
+
+.sortable-group-item .group-color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px var(--border-color);
+    flex-shrink: 0;
+}
+
+.sortable-group-item .group-name {
+    flex: 1;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sortable-group-item.drag-over .group-name {
+    color: white;
+}
+
+.group-position {
+    background: var(--accent-secondary);
+    color: white;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-width: 35px;
+    text-align: center;
+}
+
+.sortable-group-item.drag-over .group-position {
+    background: white;
+    color: var(--accent-primary);
+}
+
+.sort-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+}
+
+/* Thin Collapsed Kanban Columns */
+.kanban-column.collapsed {
+    min-width: 120px !important;
+    max-width: 120px !important;
+    opacity: 0.8;
+    transform: scale(0.95);
+}
+
+.kanban-column.collapsed:hover {
+    opacity: 1;
+    transform: scale(1);
+    min-width: 150px !important;
+    max-width: 150px !important;
+    transition: all var(--transition-normal);
+}
+
+.kanban-column.collapsed .kanban-header {
+    padding: var(--spacing-sm);
+    writing-mode: horizontal-tb;
+}
+
+.kanban-column.collapsed .kanban-title {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.kanban-column.collapsed .kanban-text {
+    font-size: 0.8rem;
+    text-align: center;
+    line-height: 1.2;
+    word-break: break-word;
+    max-width: 80px;
+}
+
+.kanban-column.collapsed .kanban-count {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+}
+
+.kanban-column.collapsed .kanban-progress,
+.kanban-column.collapsed .kanban-actions {
+    display: none;
+}
+
+.kanban-column.collapsed .group-collapse-indicator {
+    font-size: 0.7rem;
+    margin-top: var(--spacing-xs);
+}
+
+/* Responsive Group Sort */
+@media (max-width: 768px) {
+    .group-sort-dialog {
+        max-width: 100%;
+        margin: var(--spacing-sm);
+    }
+    
+    .sortable-group-item {
+        padding: var(--spacing-sm);
+        gap: var(--spacing-sm);
+    }
+    
+    .sortable-group-item .group-name {
+        font-size: 0.9rem;
+    }
+    
+    .drag-handle {
+        font-size: 0.7rem;
+        padding: 4px;
+    }
+    
+    .sort-actions {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .kanban-column.collapsed {
+        min-width: 100px !important;
+        max-width: 100px !important;
+    }
+    
+    .kanban-column.collapsed:hover {
+        min-width: 130px !important;
+        max-width: 130px !important;
+    }
+}
+
 @media (max-width: 768px) {
     .app-nav {
         flex-direction: column;
