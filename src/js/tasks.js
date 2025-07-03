@@ -1,4 +1,4 @@
-// Tasks Management - Globale Funktionen für Aufgaben-Verwaltung
+// Tasks Management - Globale Funktionen für Aufgaben-Verwaltung mit verbessertem UI
 
 let tasks = [];
 let currentViewMode = 'kanban'; // Standard auf Kanban
@@ -387,7 +387,7 @@ function updateKanbanView() {
     }
 }
 
-// Kanban nach Gruppen sortiert
+// Kanban nach Gruppen sortiert (mit Collapse-Funktionalität)
 function updateKanbanByGroups(container, filteredTasks) {
     const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
     const tasksByGroup = {};
@@ -410,19 +410,21 @@ function updateKanbanByGroups(container, filteredTasks) {
     container.innerHTML = `
         <div class="kanban-container">
             ${Object.values(tasksByGroup)
-                .filter(groupData => groupData.tasks.length > 0 || groupData.group.id === 'default')
                 .map(groupData => {
                     const progressStats = calculateGroupProgress(groupData.tasks);
+                    const isCollapsed = window.ContextMenuManager?.isGroupCollapsed(groupData.group.id) || false;
+                    
                     return `
-                        <div class="kanban-column">
-                            <div class="kanban-header">
+                        <div class="kanban-column ${isCollapsed ? 'collapsed' : ''}" data-group-id="${groupData.group.id}">
+                            <div class="kanban-header" onclick="window.ContextMenuManager.handleGroupHeaderClick(event, '${groupData.group.id}')">
                                 <div class="kanban-title">
                                     <span class="kanban-icon" style="color: ${groupData.group.color}">📁</span>
                                     <span class="kanban-text">${groupData.group.name}</span>
                                     <span class="kanban-count">${groupData.tasks.length}</span>
+                                    <span class="group-collapse-indicator">${isCollapsed ? '▶' : '▼'}</span>
                                 </div>
                                 <div class="kanban-actions">
-                                    <button class="btn-kanban-add" onclick="window.TaskManager.showNewTaskDialogForGroup('${groupData.group.id}')" title="Aufgabe zu ${groupData.group.name} hinzufügen">
+                                    <button class="btn-kanban-add" onclick="event.stopPropagation(); window.TaskManager.showNewTaskDialogForGroup('${groupData.group.id}')" title="Aufgabe zu ${groupData.group.name} hinzufügen">
                                         <span class="icon">+</span>
                                     </button>
                                 </div>
@@ -444,10 +446,7 @@ function updateKanbanByGroups(container, filteredTasks) {
                                             return priorityOrder[b.priority] - priorityOrder[a.priority];
                                         })
                                         .map(task => createKanbanCard(task)).join('') : 
-                                    `<div class="empty-state-small">
-                                        Keine Aufgaben in ${groupData.group.name}
-                                        <br><button class="btn btn-sm btn-primary" onclick="window.TaskManager.showNewTaskDialog()">+ Aufgabe hinzufügen</button>
-                                    </div>`
+                                    createEmptyState(groupData.group.name, groupData.group.id)
                                 }
                             </div>
                         </div>
@@ -457,7 +456,7 @@ function updateKanbanByGroups(container, filteredTasks) {
     `;
 }
 
-// Kanban nach Prioritäten sortiert (ursprüngliche Version)
+// Kanban nach Prioritäten sortiert (ursprüngliche Version mit Collapse)
 function updateKanbanByPriority(container, filteredTasks) {
     const priorities = {
         high: { name: 'Hohe Priorität', icon: '🔴', color: '#f44336', tasks: [] },
@@ -471,31 +470,36 @@ function updateKanbanByPriority(container, filteredTasks) {
     
     container.innerHTML = `
         <div class="kanban-container">
-            ${Object.entries(priorities).map(([priority, data]) => `
-                <div class="kanban-column">
-                    <div class="kanban-header">
-                        <div class="kanban-title">
-                            <span class="kanban-icon">${data.icon}</span>
-                            <span class="kanban-text">${data.name}</span>
-                            <span class="kanban-count">${data.tasks.length}</span>
-                        </div>
-                        <div class="kanban-actions">
-                            <button class="btn-kanban-add" onclick="window.TaskManager.showNewTaskDialogForPriority('${priority}')" title="Aufgabe mit ${data.name} hinzufügen">
-                                <span class="icon">+</span>
-                            </button>
-                        </div>
-                        <div class="kanban-progress">
-                            <div class="progress-mini" style="background: ${data.color}20">
-                                <div class="progress-fill-mini" style="width: ${data.tasks.length > 0 ? (data.tasks.filter(t => t.progress > 0).length / data.tasks.length) * 100 : 0}%; background: ${data.color}"></div>
+            ${Object.entries(priorities).map(([priority, data]) => {
+                const isCollapsed = window.ContextMenuManager?.isGroupCollapsed(`priority-${priority}`) || false;
+                
+                return `
+                    <div class="kanban-column ${isCollapsed ? 'collapsed' : ''}" data-group-id="priority-${priority}">
+                        <div class="kanban-header" onclick="window.ContextMenuManager.handleGroupHeaderClick(event, 'priority-${priority}')">
+                            <div class="kanban-title">
+                                <span class="kanban-icon">${data.icon}</span>
+                                <span class="kanban-text">${data.name}</span>
+                                <span class="kanban-count">${data.tasks.length}</span>
+                                <span class="group-collapse-indicator">${isCollapsed ? '▶' : '▼'}</span>
+                            </div>
+                            <div class="kanban-actions">
+                                <button class="btn-kanban-add" onclick="event.stopPropagation(); window.TaskManager.showNewTaskDialogForPriority('${priority}')" title="Aufgabe mit ${data.name} hinzufügen">
+                                    <span class="icon">+</span>
+                                </button>
+                            </div>
+                            <div class="kanban-progress">
+                                <div class="progress-mini" style="background: ${data.color}20">
+                                    <div class="progress-fill-mini" style="width: ${data.tasks.length > 0 ? (data.tasks.filter(t => t.progress > 0).length / data.tasks.length) * 100 : 0}%; background: ${data.color}"></div>
+                                </div>
                             </div>
                         </div>
+                        <div class="kanban-content">
+                            ${data.tasks.length > 0 ? data.tasks.map(task => createKanbanCard(task)).join('') : 
+                                createEmptyState(data.name, `priority-${priority}`)}
+                        </div>
                     </div>
-                    <div class="kanban-content">
-                        ${data.tasks.length > 0 ? data.tasks.map(task => createKanbanCard(task)).join('') : 
-                            '<div class="empty-state-small">Keine Aufgaben in dieser Priorität<br><button class="btn btn-sm btn-primary" onclick="window.TaskManager.showNewTaskDialog()">+ Aufgabe hinzufügen</button></div>'}
-                    </div>
-                </div>
-            `).join('')}
+                `;
+            }).join('')}
         </div>
     `;
 }
@@ -513,7 +517,7 @@ function calculateGroupProgress(tasks) {
     return { progressPercent, completedTasks };
 }
 
-// Listen-Ansicht aktualisieren (mit Filtern)
+// Listen-Ansicht aktualisieren (mit Filtern und Collapse)
 function updateListView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
@@ -532,7 +536,7 @@ function updateListView() {
     }
 }
 
-// Listen-Ansicht nach Gruppen
+// Listen-Ansicht nach Gruppen (mit Collapse)
 function updateListViewByGroups(container, filteredTasks) {
     const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
     const tasksByGroup = {};
@@ -555,46 +559,44 @@ function updateListViewByGroups(container, filteredTasks) {
     container.innerHTML = `
         <div class="list-view-container">
             ${Object.values(tasksByGroup)
-                .filter(groupData => groupData.tasks.length > 0)
-                .map(groupData => `
-                    <div class="list-group">
-                        <div class="list-group-header">
-                            <div class="list-group-title">
-                                <span class="group-color-dot" style="background: ${groupData.group.color}"></span>
-                                <span class="group-name">${groupData.group.name}</span>
-                                <span class="list-group-count">${groupData.tasks.length}</span>
+                .map(groupData => {
+                    const isCollapsed = window.ContextMenuManager?.isGroupCollapsed(groupData.group.id) || false;
+                    
+                    return `
+                        <div class="list-group ${isCollapsed ? 'collapsed' : ''}" data-group-id="${groupData.group.id}">
+                            <div class="list-group-header" onclick="window.ContextMenuManager.handleGroupHeaderClick(event, '${groupData.group.id}')">
+                                <div class="list-group-title">
+                                    <span class="group-color-dot" style="background: ${groupData.group.color}"></span>
+                                    <span class="group-name">${groupData.group.name}</span>
+                                    <span class="list-group-count">${groupData.tasks.length}</span>
+                                    <span class="group-collapse-indicator">${isCollapsed ? '▶' : '▼'}</span>
+                                </div>
+                                <div class="list-group-stats">
+                                    <span class="stat-item">
+                                        <span class="stat-icon">✓</span>
+                                        <span>${groupData.tasks.filter(t => t.completed).length} erledigt</span>
+                                    </span>
+                                    <span class="stat-item">
+                                        <span class="stat-icon">⚡</span>
+                                        <span>${groupData.tasks.filter(t => t.priority === 'high').length} hoch</span>
+                                    </span>
+                                </div>
                             </div>
-                            <div class="list-group-stats">
-                                <span class="stat-item">
-                                    <span class="stat-icon">✓</span>
-                                    <span>${groupData.tasks.filter(t => t.completed).length} erledigt</span>
-                                </span>
-                                <span class="stat-item">
-                                    <span class="stat-icon">⚡</span>
-                                    <span>${groupData.tasks.filter(t => t.priority === 'high').length} hoch</span>
-                                </span>
+                            <div class="list-group-content">
+                                ${groupData.tasks.length > 0 ? 
+                                    groupData.tasks.map(task => createListItem(task)).join('') : 
+                                    createEmptyState(groupData.group.name, groupData.group.id)
+                                }
                             </div>
                         </div>
-                        <div class="list-group-content">
-                            ${groupData.tasks.map(task => createListItem(task)).join('')}
-                        </div>
-                    </div>
-                `).join('')}
-            ${filteredTasks.length === 0 ? `
-                <div class="empty-state">
-                    <div class="empty-icon">📋</div>
-                    <h3>Keine Aufgaben gefunden</h3>
-                    <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
-                    <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
-                        <span class="icon">+</span> Neue Aufgabe
-                    </button>
-                </div>
-            ` : ''}
+                    `;
+                }).join('')}
+            ${filteredTasks.length === 0 ? createGlobalEmptyState() : ''}
         </div>
     `;
 }
 
-// Listen-Ansicht nach Prioritäten
+// Listen-Ansicht nach Prioritäten (mit Collapse)
 function updateListViewByPriority(container, filteredTasks) {
     const priorities = {
         high: { name: 'Hohe Priorität', icon: '🔴', color: '#f44336', tasks: [] },
@@ -609,46 +611,44 @@ function updateListViewByPriority(container, filteredTasks) {
     container.innerHTML = `
         <div class="list-view-container">
             ${Object.entries(priorities)
-                .filter(([priority, data]) => data.tasks.length > 0)
-                .map(([priority, data]) => `
-                    <div class="list-group priority-group">
-                        <div class="list-group-header">
-                            <div class="list-group-title">
-                                <span class="group-color-dot" style="background: ${data.color}">${data.icon}</span>
-                                <span class="group-name">${data.name}</span>
-                                <span class="list-group-count">${data.tasks.length}</span>
+                .map(([priority, data]) => {
+                    const isCollapsed = window.ContextMenuManager?.isGroupCollapsed(`priority-${priority}`) || false;
+                    
+                    return `
+                        <div class="list-group priority-group ${isCollapsed ? 'collapsed' : ''}" data-group-id="priority-${priority}">
+                            <div class="list-group-header" onclick="window.ContextMenuManager.handleGroupHeaderClick(event, 'priority-${priority}')">
+                                <div class="list-group-title">
+                                    <span class="group-color-dot" style="background: ${data.color}">${data.icon}</span>
+                                    <span class="group-name">${data.name}</span>
+                                    <span class="list-group-count">${data.tasks.length}</span>
+                                    <span class="group-collapse-indicator">${isCollapsed ? '▶' : '▼'}</span>
+                                </div>
+                                <div class="list-group-stats">
+                                    <span class="stat-item">
+                                        <span class="stat-icon">✓</span>
+                                        <span>${data.tasks.filter(t => t.completed).length} erledigt</span>
+                                    </span>
+                                    <span class="stat-item">
+                                        <span class="stat-icon">📋</span>
+                                        <span>${data.tasks.filter(t => t.subtasks && t.subtasks.length > 0).length} mit Subtasks</span>
+                                    </span>
+                                </div>
                             </div>
-                            <div class="list-group-stats">
-                                <span class="stat-item">
-                                    <span class="stat-icon">✓</span>
-                                    <span>${data.tasks.filter(t => t.completed).length} erledigt</span>
-                                </span>
-                                <span class="stat-item">
-                                    <span class="stat-icon">📋</span>
-                                    <span>${data.tasks.filter(t => t.subtasks && t.subtasks.length > 0).length} mit Subtasks</span>
-                                </span>
+                            <div class="list-group-content">
+                                ${data.tasks.length > 0 ? 
+                                    data.tasks.map(task => createListItem(task)).join('') : 
+                                    createEmptyState(data.name, `priority-${priority}`)
+                                }
                             </div>
                         </div>
-                        <div class="list-group-content">
-                            ${data.tasks.map(task => createListItem(task)).join('')}
-                        </div>
-                    </div>
-                `).join('')}
-            ${Object.values(priorities).every(data => data.tasks.length === 0) ? `
-                <div class="empty-state">
-                    <div class="empty-icon">📋</div>
-                    <h3>Keine Aufgaben gefunden</h3>
-                    <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
-                    <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
-                        <span class="icon">+</span> Neue Aufgabe
-                    </button>
-                </div>
-            ` : ''}
+                    `;
+                }).join('')}
+            ${Object.values(priorities).every(data => data.tasks.length === 0) ? createGlobalEmptyState() : ''}
         </div>
     `;
 }
 
-// Grid/Raster-Ansicht (mit Filtern)
+// Grid/Raster-Ansicht (mit Filtern und Gruppierung)
 function updateGridView() {
     const container = document.getElementById('tasksContainer');
     if (!container) return;
@@ -667,106 +667,163 @@ function updateGridView() {
     }
 }
 
-// Grid-Ansicht nach Gruppen sortiert
+// Grid-Ansicht nach Gruppen sortiert (mit Collapse)
 function updateGridViewByGroups(container, filteredTasks) {
-    // Nach Gruppen sortieren, dann nach Priorität
-    filteredTasks.sort((a, b) => {
-        // Erst nach Gruppe sortieren
-        const groupA = window.GroupManager.getGroupById(a.groupId);
-        const groupB = window.GroupManager.getGroupById(b.groupId);
-        const groupComparison = (groupA?.name || '').localeCompare(groupB?.name || '');
-        
-        if (groupComparison !== 0) return groupComparison;
-        
-        // Dann nach Priorität (high -> medium -> low)
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
-        return priorityOrder[b.priority] - priorityOrder[a.priority];
+    const groups = window.GroupManager ? window.GroupManager.getAllGroups() : [];
+    const tasksByGroup = {};
+    
+    // Initialisiere Gruppen
+    groups.forEach(group => {
+        tasksByGroup[group.id] = {
+            group: group,
+            tasks: []
+        };
     });
     
-    renderGridTasks(container, filteredTasks, 'Nach Gruppen gruppiert');
-}
-
-// Grid-Ansicht nach Prioritäten sortiert
-function updateGridViewByPriority(container, filteredTasks) {
-    // Nach Priorität sortieren, dann nach Gruppen
-    filteredTasks.sort((a, b) => {
-        // Erst nach Priorität sortieren
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
-        const priorityComparison = priorityOrder[b.priority] - priorityOrder[a.priority];
-        
-        if (priorityComparison !== 0) return priorityComparison;
-        
-        // Dann nach Gruppe sortieren
-        const groupA = window.GroupManager.getGroupById(a.groupId);
-        const groupB = window.GroupManager.getGroupById(b.groupId);
-        return (groupA?.name || '').localeCompare(groupB?.name || '');
-    });
-    
-    renderGridTasks(container, filteredTasks, 'Nach Priorität gruppiert');
-}
-
-// Grid-Tasks rendern (Hilfsfunktion)
-function renderGridTasks(container, filteredTasks, sortInfo) {
-    container.innerHTML = '';
-    
-    if (filteredTasks.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">📝</div>
-                <h3>Keine Aufgaben gefunden</h3>
-                <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
-                <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
-                    <span class="icon">+</span> Neue Aufgabe
-                </button>
-            </div>
-        `;
-        return;
-    }
-    
-    // Grid Container für Raster-Ansicht
-    const gridContainer = document.createElement('div');
-    gridContainer.className = 'tasks-grid';
-    
-    // Sortierungsinfo hinzufügen
-    const sortInfoEl = document.createElement('div');
-    sortInfoEl.className = 'grid-sort-info';
-    sortInfoEl.innerHTML = `<span class="sort-info-text">${sortInfo} • ${filteredTasks.length} Aufgaben</span>`;
-    
+    // Aufgaben in Gruppen einteilen und nach Priorität sortieren
     filteredTasks.forEach(task => {
-        const taskCard = createTaskCard(task);
-        gridContainer.appendChild(taskCard);
+        if (tasksByGroup[task.groupId]) {
+            tasksByGroup[task.groupId].tasks.push(task);
+        }
     });
     
-    container.appendChild(sortInfoEl);
-    container.appendChild(gridContainer);
+    // Innerhalb jeder Gruppe nach Priorität sortieren
+    Object.values(tasksByGroup).forEach(groupData => {
+        groupData.tasks.sort((a, b) => {
+            const priorityOrder = { high: 3, medium: 2, low: 1 };
+            return priorityOrder[b.priority] - priorityOrder[a.priority];
+        });
+    });
+    
+    container.innerHTML = `
+        <div class="grid-sort-info">
+            <span class="sort-info-text">Nach Gruppen gruppiert • ${filteredTasks.length} Aufgaben</span>
+        </div>
+        <div class="grid-groups-container">
+            ${Object.values(tasksByGroup)
+                .map(groupData => {
+                    const isCollapsed = window.ContextMenuManager?.isGroupCollapsed(groupData.group.id) || false;
+                    
+                    return `
+                        <div class="grid-group-section ${isCollapsed ? 'collapsed' : ''}" data-group-id="${groupData.group.id}">
+                            <div class="grid-group-header" onclick="window.ContextMenuManager.handleGroupHeaderClick(event, '${groupData.group.id}')">
+                                <div class="grid-group-title">
+                                    <span class="group-color-dot" style="background: ${groupData.group.color}"></span>
+                                    <span class="group-name">${groupData.group.name}</span>
+                                    <span class="list-group-count">${groupData.tasks.length}</span>
+                                    <span class="group-collapse-indicator">${isCollapsed ? '▶' : '▼'}</span>
+                                </div>
+                            </div>
+                            <div class="grid-group-content">
+                                ${groupData.tasks.length > 0 ? 
+                                    groupData.tasks.map(task => createTaskCard(task)).map(card => card.outerHTML).join('') : 
+                                    createEmptyState(groupData.group.name, groupData.group.id)
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            ${filteredTasks.length === 0 ? createGlobalEmptyState() : ''}
+        </div>
+    `;
 }
 
-// Kanban-Karte erstellen (mit Fokus-Button)
+// Grid-Ansicht nach Prioritäten sortiert (mit Collapse)
+function updateGridViewByPriority(container, filteredTasks) {
+    const priorities = {
+        high: { name: 'Hohe Priorität', icon: '🔴', color: '#f44336', tasks: [] },
+        medium: { name: 'Mittlere Priorität', icon: '🟡', color: '#ff9800', tasks: [] },
+        low: { name: 'Niedrige Priorität', icon: '🟢', color: '#4caf50', tasks: [] }
+    };
+    
+    // Aufgaben nach Priorität gruppieren
+    filteredTasks.forEach(task => {
+        priorities[task.priority].tasks.push(task);
+    });
+    
+    // Innerhalb jeder Prioritätsstufe nach Gruppen sortieren
+    Object.values(priorities).forEach(priorityData => {
+        priorityData.tasks.sort((a, b) => {
+            const groupA = window.GroupManager.getGroupById(a.groupId);
+            const groupB = window.GroupManager.getGroupById(b.groupId);
+            return (groupA?.name || '').localeCompare(groupB?.name || '');
+        });
+    });
+    
+    container.innerHTML = `
+        <div class="grid-sort-info">
+            <span class="sort-info-text">Nach Priorität gruppiert • ${filteredTasks.length} Aufgaben</span>
+        </div>
+        <div class="grid-groups-container">
+            ${Object.entries(priorities)
+                .map(([priority, data]) => {
+                    const isCollapsed = window.ContextMenuManager?.isGroupCollapsed(`priority-${priority}`) || false;
+                    
+                    return `
+                        <div class="grid-group-section ${isCollapsed ? 'collapsed' : ''}" data-group-id="priority-${priority}">
+                            <div class="grid-group-header" onclick="window.ContextMenuManager.handleGroupHeaderClick(event, 'priority-${priority}')">
+                                <div class="grid-group-title">
+                                    <span class="group-color-dot" style="background: ${data.color}">${data.icon}</span>
+                                    <span class="group-name">${data.name}</span>
+                                    <span class="list-group-count">${data.tasks.length}</span>
+                                    <span class="group-collapse-indicator">${isCollapsed ? '▶' : '▼'}</span>
+                                </div>
+                            </div>
+                            <div class="grid-group-content">
+                                ${data.tasks.length > 0 ? 
+                                    data.tasks.map(task => createTaskCard(task)).map(card => card.outerHTML).join('') : 
+                                    createEmptyState(data.name, `priority-${priority}`)
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            ${Object.values(priorities).every(data => data.tasks.length === 0) ? createGlobalEmptyState() : ''}
+        </div>
+    `;
+}
+
+// Empty State erstellen (mittig formatiert)
+function createEmptyState(groupName, groupId) {
+    return `
+        <div class="empty-state-small">
+            <p>Keine Aufgaben in ${groupName}</p>
+            <button class="btn btn-primary btn-sm" onclick="window.TaskManager.showNewTaskDialogForGroup('${groupId}')">
+                <span class="icon">+</span> Aufgabe hinzufügen
+            </button>
+        </div>
+    `;
+}
+
+// Globaler Empty State
+function createGlobalEmptyState() {
+    return `
+        <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>Keine Aufgaben gefunden</h3>
+            <p>Erstellen Sie Ihre erste Aufgabe oder passen Sie den Filter an.</p>
+            <button class="btn btn-primary" onclick="window.TaskManager.showNewTaskDialog()">
+                <span class="icon">+</span> Neue Aufgabe
+            </button>
+        </div>
+    `;
+}
+
+// Kanban-Karte erstellen (ohne Action-Buttons)
 function createKanbanCard(task) {
     const group = window.GroupManager.getGroupById(task.groupId);
     const groupName = group ? group.name : 'Unbekannt';
     const groupColor = group ? group.color : '#666';
     
     return `
-        <div class="kanban-card priority-${task.priority}" data-task-id="${task.id}">
+        <div class="kanban-card priority-${task.priority}" data-task-id="${task.id}" onclick="window.TaskManager.openTaskEditor('${task.id}')">
             <div class="card-header">
                 <div class="card-group-indicator" style="background: ${groupColor}"></div>
-                <div class="card-actions">
-                    <button class="card-action focus-btn" onclick="event.stopPropagation(); window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">
-                        🎯
-                    </button>
-                    <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.openTaskEditor('${task.id}')" title="Bearbeiten">
-                        ✏️
-                    </button>
-                    <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.completeTask('${task.id}')" title="Als erledigt markieren">
-                        ✓
-                    </button>
-                </div>
             </div>
             
-            <h4 class="card-title" onclick="window.TaskManager.openTaskEditor('${task.id}')">${task.title}</h4>
+            <h4 class="card-title">${task.title}</h4>
             
-            ${task.description ? `<div class="card-content" onclick="window.TaskManager.openTaskEditor('${task.id}')">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
+            ${task.description ? `<div class="card-content">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
             
             ${task.subtasks && task.subtasks.length > 0 ? `
                 <div class="card-progress">
@@ -796,15 +853,15 @@ function createKanbanCard(task) {
     `;
 }
 
-// Listen-Item erstellen (mit Fokus-Button)
+// Listen-Item erstellen (ohne Action-Buttons)
 function createListItem(task) {
     const group = window.GroupManager.getGroupById(task.groupId);
     const groupName = group ? group.name : 'Unbekannt';
     
     return `
-        <div class="list-item" data-task-id="${task.id}">
+        <div class="list-item" data-task-id="${task.id}" onclick="window.TaskManager.openTaskEditor('${task.id}')">
             <div class="list-item-priority ${task.priority}"></div>
-            <div class="list-item-content" onclick="window.TaskManager.openTaskEditor('${task.id}')">
+            <div class="list-item-content">
                 <div class="list-item-title">${task.title}</div>
                 <div class="list-item-meta">
                     <span class="meta-item">📋 ${groupName}</span>
@@ -817,25 +874,11 @@ function createListItem(task) {
                     <span class="meta-item">📅 ${window.StorageManager.formatDate(task.createdAt)}</span>
                 </div>
             </div>
-            <div class="list-item-actions">
-                <button class="card-action focus-btn" onclick="event.stopPropagation(); window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">
-                    🎯
-                </button>
-                <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.openTaskEditor('${task.id}')" title="Bearbeiten">
-                    ✏️
-                </button>
-                <button class="card-action" onclick="event.stopPropagation(); window.TaskManager.completeTask('${task.id}')" title="Als erledigt markieren">
-                    ✓
-                </button>
-                <button class="card-action danger" onclick="event.stopPropagation(); window.TaskManager.deleteTask('${task.id}')" title="Löschen">
-                    🗑️
-                </button>
-            </div>
         </div>
     `;
 }
 
-// Aufgaben-Karte erstellen (für Grid-Ansicht mit Fokus-Button)
+// Aufgaben-Karte erstellen (für Grid-Ansicht ohne Action-Buttons)
 function createTaskCard(task) {
     const group = window.GroupManager.getGroupById(task.groupId);
     const groupName = group ? group.name : 'Unbekannt';
@@ -860,20 +903,6 @@ function createTaskCard(task) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-priority" style="background-color: ${priorityColors[task.priority]}"></div>
-            <div class="card-actions">
-                <button class="card-action focus-btn" onclick="window.FocusManager.startFocusSession('${task.id}')" title="Fokus starten">
-                    🎯
-                </button>
-                <button class="card-action" onclick="window.TaskManager.openTaskEditor('${task.id}')" title="Bearbeiten">
-                    ✏️
-                </button>
-                <button class="card-action" onclick="window.TaskManager.completeTask('${task.id}')" title="Als erledigt markieren">
-                    ✓
-                </button>
-                <button class="card-action danger" onclick="window.TaskManager.deleteTask('${task.id}')" title="Löschen">
-                    🗑️
-                </button>
-            </div>
         </div>
         
         <h3 class="card-title">${task.title}</h3>
@@ -907,9 +936,8 @@ function createTaskCard(task) {
     
     // Click Handler für das Öffnen des Editors
     card.addEventListener('click', (e) => {
-        if (!e.target.closest('.card-action')) {
-            openTaskEditor(task.id);
-        }
+        e.stopPropagation();
+        openTaskEditor(task.id);
     });
     
     return card;
@@ -931,6 +959,9 @@ function updateRecentTasks() {
         container.innerHTML = `
             <div class="empty-state-small">
                 <p>Keine aktuellen Aufgaben vorhanden.</p>
+                <button class="btn btn-primary btn-sm" onclick="window.TaskManager.showNewTaskDialog()">
+                    + Aufgabe erstellen
+                </button>
             </div>
         `;
         return;
@@ -1023,7 +1054,6 @@ window.TaskManager = {
     updateListViewByPriority,
     updateGridViewByGroups,
     updateGridViewByPriority,
-    renderGridTasks,
     openTaskEditor,
     showNewTaskDialog,
     showNewTaskDialogForGroup,

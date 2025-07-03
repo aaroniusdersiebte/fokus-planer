@@ -245,6 +245,12 @@ function initializeUserInterface() {
 function initializeEventSystem() {
     console.log('🔗 Event-System wird initialisiert...');
     
+    // Context Menu System initialisieren
+    if (window.ContextMenuManager) {
+        window.ContextMenuManager.initializeContextMenu();
+        console.log('✅ Kontextmenü-System initialisiert');
+    }
+    
     // Window-Events
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('unload', handleUnload);

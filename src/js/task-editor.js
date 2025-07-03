@@ -1,3 +1,64 @@
+// Hilfsfunktionen für temporäre Tasks
+function removeTempNote(noteId) {
+    if (window.tempTaskNotes) {
+        window.tempTaskNotes = window.tempTaskNotes.filter(note => note.id !== noteId);
+        
+        const messageEl = document.querySelector(`[data-note-id="${noteId}"]`);
+        if (messageEl) messageEl.remove();
+        
+        const entryCount = document.querySelector('.entry-count');
+        if (entryCount) {
+            entryCount.textContent = `${window.tempTaskNotes.length} Einträge`;
+        }
+    }
+}
+
+function removeTempSubtask(subtaskId) {
+    if (window.tempTaskSubtasks) {
+        window.tempTaskSubtasks = window.tempTaskSubtasks.filter(subtask => subtask.id !== subtaskId);
+        
+        const subtaskEl = document.querySelector(`[data-subtask-id="${subtaskId}"]`);
+        if (subtaskEl) subtaskEl.remove();
+        
+        updateTempProgress();
+    }
+}
+
+function toggleTempSubtask(subtaskId) {
+    if (window.tempTaskSubtasks) {
+        const subtask = window.tempTaskSubtasks.find(st => st.id === subtaskId);
+        if (subtask) {
+            subtask.completed = !subtask.completed;
+            
+            const subtaskEl = document.querySelector(`[data-subtask-id="${subtaskId}"]`);
+            if (subtaskEl) {
+                const checkbox = subtaskEl.querySelector('input[type="checkbox"]');
+                if (subtask.completed) {
+                    subtaskEl.classList.add('completed');
+                } else {
+                    subtaskEl.classList.remove('completed');
+                }
+            }
+            
+            updateTempProgress();
+        }
+    }
+}
+
+function updateTempProgress() {
+    if (!window.tempTaskSubtasks) return;
+    
+    const completed = window.tempTaskSubtasks.filter(st => st.completed).length;
+    const total = window.tempTaskSubtasks.length;
+    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    const progressFill = document.querySelector('.progress-fill');
+    const progressText = document.querySelector('.progress-text');
+    
+    if (progressFill) progressFill.style.width = progress + '%';
+    if (progressText) progressText.textContent = `${completed}/${total}`;
+}
+
 // Unified Task Editor - Einheitliche Bearbeitungskomponente für Aufgaben
 
 let currentEditingTask = null;
@@ -102,15 +163,15 @@ function createEditorContent(task, groups, isEdit, defaultValues = {}) {
                 </div>
 
                 <!-- Chat/History Sektion (2. Position - Notizen) -->
-                ${isEdit && task.notes && task.notes.length > 0 ? `
-                    <div class="task-section">
-                        <div class="section-header">
-                            <h4>💬 Verlauf & Notizen</h4>
-                            <span class="entry-count">${task.notes.length} Einträge</span>
-                        </div>
-                        
-                        <div class="history-chat" id="historyChat">
-                            ${task.notes.map(note => `
+                <div class="task-section">
+                    <div class="section-header">
+                        <h4>💬 Verlauf & Notizen</h4>
+                        <span class="entry-count">${isEdit && task.notes ? task.notes.length : 0} Einträge</span>
+                    </div>
+                    
+                    <div class="history-chat" id="historyChat">
+                        ${isEdit && task.notes && task.notes.length > 0 ? 
+                            task.notes.map(note => `
                                 <div class="chat-message ${note.important ? 'important' : ''}" data-note-id="${note.id}">
                                     <div class="message-header">
                                         <span class="message-time">${formatChatTime(note.createdAt)}</span>
@@ -131,44 +192,45 @@ function createEditorContent(task, groups, isEdit, defaultValues = {}) {
                                         ${note.text}
                                     </div>
                                 </div>
-                            `).join('')}
-                        </div>
-                        
-                        <div class="message-input-container">
-                            <textarea id="newMessageInput" class="modern-textarea message-input" 
-                                      placeholder="Notiz, Fortschritt oder Idee hinzufügen... (Ctrl+Enter zum Senden)"
-                                      rows="2"></textarea>
-                            <button type="button" class="btn btn-primary modern" onclick="addNewTaskNote('${task.id}')">
-                                <span class="icon">💬</span>
-                                Hinzufügen
-                            </button>
-                        </div>
+                            `).join('') : 
+                            '<div class="no-messages">Noch keine Notizen vorhanden. Fügen Sie hier Verlauf und wichtige Informationen hinzu.</div>'
+                        }
                     </div>
-                ` : ''}
+                    
+                    <div class="message-input-container">
+                        <textarea id="newMessageInput" class="modern-textarea message-input" 
+                                  placeholder="Notiz, Fortschritt oder Idee hinzufügen... (Ctrl+Enter zum Senden)"
+                                  rows="2"></textarea>
+                        <button type="button" class="btn btn-primary modern" onclick="addNewTaskNote('${isEdit ? task.id : 'NEW'}')">
+                            <span class="icon">💬</span>
+                            Hinzufügen
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Subtasks Sektion (3. Position - Unteraufgaben) -->
-                ${isEdit && task.subtasks && task.subtasks.length > 0 ? `
-                    <div class="task-section">
-                        <div class="section-header">
-                            <h4>📋 Unteraufgaben</h4>
-                            <div class="progress-indicator">
-                                <div class="progress-bar modern">
-                                    <div class="progress-fill" style="width: ${task.progress || 0}%"></div>
-                                </div>
-                                <span class="progress-text">${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length}</span>
+                <div class="task-section">
+                    <div class="section-header">
+                        <h4>📋 Unteraufgaben</h4>
+                        <div class="progress-indicator">
+                            <div class="progress-bar modern">
+                                <div class="progress-fill" style="width: ${isEdit && task.subtasks ? (task.progress || 0) : 0}%"></div>
                             </div>
+                            <span class="progress-text">${isEdit && task.subtasks ? task.subtasks.filter(st => st.completed).length : 0}/${isEdit && task.subtasks ? task.subtasks.length : 0}</span>
                         </div>
-                        
-                        <div class="subtask-input-container">
-                            <input type="text" id="newSubtaskInput" class="modern-input" 
-                                   placeholder="Neue Unteraufgabe hinzufügen...">
-                            <button type="button" class="btn btn-icon modern" onclick="addNewSubtask('${task.id}')">
-                                +
-                            </button>
-                        </div>
-                        
-                        <div class="subtasks-list modern" id="subtasksList">
-                            ${task.subtasks.map(subtask => `
+                    </div>
+                    
+                    <div class="subtask-input-container">
+                        <input type="text" id="newSubtaskInput" class="modern-input" 
+                               placeholder="Neue Unteraufgabe hinzufügen...">
+                        <button type="button" class="btn btn-icon modern" onclick="addNewSubtask('${isEdit ? task.id : 'NEW'}')">
+                            +
+                        </button>
+                    </div>
+                    
+                    <div class="subtasks-list modern" id="subtasksList">
+                        ${isEdit && task.subtasks && task.subtasks.length > 0 ? 
+                            task.subtasks.map(subtask => `
                                 <div class="subtask-item modern ${subtask.completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
                                     <label class="subtask-checkbox">
                                         <input type="checkbox" ${subtask.completed ? 'checked' : ''} 
@@ -185,10 +247,11 @@ function createEditorContent(task, groups, isEdit, defaultValues = {}) {
                                         </button>
                                     </div>
                                 </div>
-                            `).join('')}
-                        </div>
+                            `).join('') :
+                            '<div class="no-subtasks">Noch keine Unteraufgaben vorhanden. Fügen Sie hier kleinere Schritte hinzu.</div>'
+                        }
                     </div>
-                ` : ''}
+                </div>
 
                 <!-- Form Actions -->
                 <div class="form-actions modern">
@@ -285,7 +348,27 @@ function handleFormSubmit(task, isEdit) {
     if (isEdit) {
         savedTask = window.TaskManager.updateTask(task.id, formData);
     } else {
+        // Neue Aufgabe erstellen
         savedTask = window.TaskManager.createTask(formData);
+        
+        // Temporäre Notizen hinzufügen
+        if (window.tempTaskNotes && window.tempTaskNotes.length > 0) {
+            window.tempTaskNotes.forEach(tempNote => {
+                window.TaskManager.addTaskNote(savedTask.id, tempNote.text);
+            });
+            window.tempTaskNotes = []; // Zurücksetzen
+        }
+        
+        // Temporäre Subtasks hinzufügen
+        if (window.tempTaskSubtasks && window.tempTaskSubtasks.length > 0) {
+            window.tempTaskSubtasks.forEach(tempSubtask => {
+                const newSubtask = window.TaskManager.addSubtask(savedTask.id, tempSubtask.text);
+                if (newSubtask && tempSubtask.completed) {
+                    window.TaskManager.toggleSubtask(savedTask.id, newSubtask.id);
+                }
+            });
+            window.tempTaskSubtasks = []; // Zurücksetzen
+        }
     }
     
     // Callbacks ausführen
@@ -357,6 +440,53 @@ function addNewSubtask(taskId) {
     if (!input || !input.value.trim()) return;
     
     const subtaskText = input.value.trim();
+    
+    // Für neue Aufgaben: Subtasks zwischenspeichern
+    if (taskId === 'NEW') {
+        if (!window.tempTaskSubtasks) window.tempTaskSubtasks = [];
+        const tempSubtask = {
+            id: Date.now().toString(),
+            text: subtaskText,
+            completed: false,
+            createdAt: new Date().toISOString()
+        };
+        window.tempTaskSubtasks.push(tempSubtask);
+        
+        // Zur Anzeige hinzufügen
+        const subtasksList = document.getElementById('subtasksList');
+        if (subtasksList) {
+            // Entferne "keine Subtasks" Nachricht
+            const noSubtasks = subtasksList.querySelector('.no-subtasks');
+            if (noSubtasks) noSubtasks.remove();
+            
+            const subtaskElement = document.createElement('div');
+            subtaskElement.className = 'subtask-item modern';
+            subtaskElement.setAttribute('data-subtask-id', tempSubtask.id);
+            subtaskElement.innerHTML = `
+                <label class="subtask-checkbox">
+                    <input type="checkbox" onchange="toggleTempSubtask('${tempSubtask.id}')">
+                    <span class="checkmark"></span>
+                </label>
+                <span class="subtask-text">${tempSubtask.text}</span>
+                <div class="subtask-actions">
+                    <button type="button" class="btn-icon small danger" onclick="removeTempSubtask('${tempSubtask.id}')" title="Löschen">
+                        🗑️
+                    </button>
+                </div>
+            `;
+            
+            subtasksList.appendChild(subtaskElement);
+        }
+        
+        // Progress aktualisieren
+        updateTempProgress();
+        
+        input.value = '';
+        input.focus();
+        return;
+    }
+    
+    // Für existierende Aufgaben: Normal hinzufügen
     const newSubtask = window.TaskManager.addSubtask(taskId, subtaskText);
     
     if (newSubtask) {
@@ -380,6 +510,7 @@ function addNewSubtask(taskId) {
                     </button>
                 </div>
             `;
+            
             subtasksList.appendChild(subtaskElement);
         }
         
@@ -395,6 +526,56 @@ function addNewTaskNote(taskId) {
     if (!input || !input.value.trim()) return;
     
     const noteText = input.value.trim();
+    
+    // Für neue Aufgaben: Notizen zwischenspeichern
+    if (taskId === 'NEW') {
+        // Temporäre Notizen für neue Aufgaben
+        if (!window.tempTaskNotes) window.tempTaskNotes = [];
+        const tempNote = {
+            id: Date.now().toString(),
+            text: noteText,
+            createdAt: new Date().toISOString(),
+            important: false
+        };
+        window.tempTaskNotes.push(tempNote);
+        
+        // Zur Anzeige hinzufügen
+        const historyChat = document.getElementById('historyChat');
+        if (historyChat) {
+            // Entferne "keine Notizen" Nachricht
+            const noMessages = historyChat.querySelector('.no-messages');
+            if (noMessages) noMessages.remove();
+            
+            const messageElement = document.createElement('div');
+            messageElement.className = 'chat-message';
+            messageElement.setAttribute('data-note-id', tempNote.id);
+            messageElement.innerHTML = `
+                <div class="message-header">
+                    <span class="message-time">${formatChatTime(tempNote.createdAt)}</span>
+                    <div class="message-actions">
+                        <button class="btn-icon micro danger" onclick="removeTempNote('${tempNote.id}')" title="Löschen">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                <div class="message-content">${tempNote.text}</div>
+            `;
+            
+            historyChat.insertBefore(messageElement, historyChat.firstChild);
+        }
+        
+        // Entry count aktualisieren
+        const entryCount = document.querySelector('.entry-count');
+        if (entryCount) {
+            entryCount.textContent = `${window.tempTaskNotes.length} Einträge`;
+        }
+        
+        input.value = '';
+        input.focus();
+        return;
+    }
+    
+    // Für existierende Aufgaben: Normal speichern
     const newNote = window.TaskManager.addTaskNote(taskId, noteText);
     
     if (newNote) {
@@ -665,3 +846,7 @@ window.editSubtaskText = function(subtaskId) {
     console.log('Edit subtask:', subtaskId);
 };
 window.formatChatTime = formatChatTime;
+window.removeTempNote = removeTempNote;
+window.removeTempSubtask = removeTempSubtask;
+window.toggleTempSubtask = toggleTempSubtask;
+window.updateTempProgress = updateTempProgress;
